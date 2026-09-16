@@ -1,0 +1,12 @@
+[Unit]
+Description=Daily Hermes control-plane configuration backup
+
+[Timer]
+OnCalendar=daily
+RandomizedDelaySec=15m
+Persistent=true
+Unit=hermes-config-backup.service
+
+[Install]
+WantedBy=timers.target
+

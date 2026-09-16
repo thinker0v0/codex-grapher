@@ -1,0 +1,39 @@
+workspace_id: REPLACE_WITH_WORKSPACE_ID
+
+roles:
+  viewer: [status, evidence]
+  requester: [status, evidence, create_own, cancel_own]
+  operator: [status, evidence, create, cancel, retry, run_ci, create_pr]
+  approver: [status, evidence, approve_merge, approve_deploy, approve_external_message]
+  emergency_admin: [status, evidence, stop_gateway, disable_admission, revoke_worker]
+
+permanently_forbidden:
+  - enable_live_trading
+  - place_live_order
+  - increase_risk_limit
+  - release_kill_switch
+  - withdraw_funds
+  - reveal_secret
+
+bindings:
+  - member_id: REPLACE_WITH_MEMBER_ID
+    project_id: fin-global
+    channel_id: REPLACE_WITH_CHANNEL_ID
+    role: requester
+
+limits:
+  tasks_per_user_per_minute: 5
+  tasks_per_user_per_hour: 30
+  active_tasks_per_project: 2
+  expensive_tasks_per_hour: 2
+  failed_auth_lock_count: 5
+  failed_auth_lock_minutes: 15
+  event_dedupe_hours: 24
+
+attachments:
+  max_bytes: 104857600
+  max_archive_depth: 3
+  max_expansion_ratio: 20
+  reject_executables: true
+  reject_macros: true
+  quarantine_before_parse: true

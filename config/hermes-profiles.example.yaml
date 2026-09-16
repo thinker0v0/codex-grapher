@@ -1,0 +1,57 @@
+profiles:
+  fin-global:
+    os_identity: hermes-fin-global
+    workspace: /srv/hermes/fin-global
+    slack_channels: [FIN_GLOBAL_CONTROL, FIN_GLOBAL_RESULTS]
+    repositories: [financial-data, financial-research]
+    prompt: prompts/hermes/fin-global.md
+    max_concurrent_children: 2
+    max_spawn_depth: 1
+  fin-korea:
+    os_identity: hermes-fin-korea
+    workspace: /srv/hermes/fin-korea
+    slack_channels: [FIN_KOREA_CONTROL, FIN_KOREA_RESULTS]
+    repositories: [financial-data, financial-research]
+    prompt: prompts/hermes/fin-korea.md
+    max_concurrent_children: 2
+    max_spawn_depth: 1
+  hynix:
+    os_identity: hermes-hynix
+    workspace: /srv/hermes/hynix
+    slack_channels: [HYNIX_CONTROL, HYNIX_RESULTS]
+    repositories: [hynix-application]
+    prompt: prompts/hermes/hynix.md
+    max_concurrent_children: 1
+    max_spawn_depth: 1
+  business:
+    os_identity: hermes-business
+    workspace: /srv/hermes/business
+    slack_channels: [BUSINESS_CONTROL, BUSINESS_RESULTS]
+    repositories: [business-platform]
+    prompt: prompts/hermes/business.md
+    max_concurrent_children: 2
+    max_spawn_depth: 1
+  oss:
+    os_identity: hermes-oss
+    workspace: /srv/hermes/oss
+    slack_channels: [OSS_CONTROL, OSS_RESULTS]
+    repositories: [open-source-pilot]
+    prompt: prompts/hermes/oss.md
+    max_concurrent_children: 2
+    max_spawn_depth: 1
+  evaluator:
+    os_identity: hermes-evaluator
+    workspace: /srv/hermes/evaluator
+    source_access: read-only
+    artifact_access: read-only
+    ledger_access: append-only
+    prompt: prompts/hermes/evaluator.md
+    max_concurrent_children: 1
+    max_spawn_depth: 1
+
+global_limits:
+  concurrent_hermes_turns: 2
+  concurrent_codex_jobs: 1
+  cpu_queue_threshold_percent: 70
+  memory_queue_threshold_percent: 75
+  disk_reject_threshold_percent: 80

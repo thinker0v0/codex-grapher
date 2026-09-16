@@ -1,0 +1,34 @@
+projects:
+  control-plane:
+    repo: ai-operations-control-plane
+    workflow: vanilla-codex
+    risk_class: high
+  financial-data:
+    repo: financial-data
+    workflow: spec-kit
+    risk_class: critical
+  financial-research:
+    repo: financial-research
+    workflow: spec-kit
+    risk_class: critical
+  trading-engine:
+    repo: external-not-connected
+    workflow: none
+    risk_class: prohibited
+    codex_access: false
+    hermes_access: false
+  business-platform:
+    repo: business-platform
+    workflow: gstack-hermes
+    risk_class: high
+  open-source-pilot:
+    repo: open-source-pilot
+    workflow: superpowers
+    risk_class: medium
+
+forbidden_global_workflows:
+  - omx
+  - gsd
+
+explicit_only_skills:
+  - unlazy

@@ -1,0 +1,14 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Verified Adaptive Project Goal",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["goal_id", "project", "objective", "accepted_sha", "rubric_sha256"],
+  "properties": {
+    "goal_id": {"type": "string", "minLength": 8},
+    "project": {"enum": ["nomad", "opensource", "business", "hynix"]},
+    "objective": {"type": "string", "minLength": 10},
+    "accepted_sha": {"type": "string", "pattern": "^[a-f0-9]{40}$"},
+    "rubric_sha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"}
+  }
+}

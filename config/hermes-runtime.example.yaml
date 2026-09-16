@@ -1,0 +1,14 @@
+database:
+  journal_mode: wal
+
+runtime:
+  nofile_soft_limit: 4096
+
+model:
+  provider: opencode-free
+  default: x-preview-f-free
+  base_url: https://opencode.ai/zen/v1
+  api_mode: chat_completions
+
+# Ox Alpha is keyless. Any fallback secrets belong in /etc/hermes/<profile>.env,
+# never in this file.

@@ -1,0 +1,38 @@
+{
+  "nomad": [
+    {"kind":"QUESTION","write_set":["research/"],"acceptance":["falsifiable hypothesis and metrics"]},
+    {"kind":"POINT_IN_TIME_DATA","write_set":["data/"],"acceptance":["timestamped lineage and survivorship policy"]},
+    {"kind":"DATA_QA","write_set":["evidence/data/"],"acceptance":["missingness, revisions, and leakage checks pass"]},
+    {"kind":"BASELINE","write_set":["models/baseline/"],"acceptance":["simple benchmark reproduced"]},
+    {"kind":"MODEL_STRATEGY","write_set":["models/candidate/"],"acceptance":["candidate beats stated baseline out of sample"]},
+    {"kind":"LEAKAGE_AUDIT","write_set":["evidence/leakage/"],"acceptance":["feature and label timing audit passes"]},
+    {"kind":"WALK_FORWARD","write_set":["evidence/walk_forward/"],"acceptance":["purged rolling evaluation recorded"]},
+    {"kind":"COST_STRESS","write_set":["evidence/stress/"],"acceptance":["fees, spread, slippage, latency, and capacity stressed"]},
+    {"kind":"PAPER","write_set":["paper/"],"acceptance":["paper-only evidence is distinct from backtest evidence"]},
+    {"kind":"RISK_REVIEW","write_set":["evidence/risk/"],"acceptance":["drawdown, exposure, kill switch, and human gate reviewed"],"human_gate":true}
+  ],
+  "opensource": [
+    {"kind":"USER_PROBLEM","write_set":["docs/spec/"],"acceptance":["user and failure are observable"]},
+    {"kind":"IMPLEMENT","write_set":["src/"],"acceptance":["small scoped implementation"]},
+    {"kind":"TEST","write_set":["tests/"],"acceptance":["unit and integration tests pass"]},
+    {"kind":"SECURITY_LICENSE","write_set":["evidence/review/"],"acceptance":["security and license review passes"]},
+    {"kind":"DOCS_USER_SIM","write_set":["docs/"],"acceptance":["blind user can complete primary task"]},
+    {"kind":"RELEASE_CANDIDATE","write_set":["evidence/release/"],"acceptance":["reproducible candidate is ready"],"human_gate":true}
+  ],
+  "business": [
+    {"kind":"HYPOTHESIS","write_set":["research/hypothesis/"],"acceptance":["customer, pain, and falsifier stated"]},
+    {"kind":"MARKET_EVIDENCE","write_set":["research/market/"],"acceptance":["dated primary evidence and alternatives"]},
+    {"kind":"OFFER_ECONOMICS","write_set":["research/economics/"],"acceptance":["offer, price, costs, and constraints"]},
+    {"kind":"BOUNDED_PROTOTYPE","write_set":["prototype/"],"acceptance":["non-production prototype passes tests"]},
+    {"kind":"USER_SIMULATION","write_set":["evidence/user_sim/"],"acceptance":["blind user outcome recorded"]},
+    {"kind":"EXPERIMENT_PLAN","write_set":["experiments/"],"acceptance":["metric, sample, stop, and ethics rules"],"human_gate":true}
+  ],
+  "hynix": [
+    {"kind":"QUESTION","write_set":["research/question/"],"acceptance":["decision and freshness boundary stated"]},
+    {"kind":"SOURCE_DATE_CHECK","write_set":["research/sources/"],"acceptance":["primary sources and dates verified"]},
+    {"kind":"DATASET","write_set":["data/"],"acceptance":["reproducible dated dataset"]},
+    {"kind":"ANALYSIS","write_set":["analysis/"],"acceptance":["methods and uncertainty reproducible"]},
+    {"kind":"CONTRADICTION_REVIEW","write_set":["evidence/contradictions/"],"acceptance":["counterevidence and alternate explanations"]},
+    {"kind":"REPORT_REFRESH","write_set":["reports/"],"acceptance":["report includes expiry and refresh plan"]}
+  ]
+}

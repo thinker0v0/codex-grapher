@@ -1,0 +1,24 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:ai-ops:schema:evaluation-contract:v1",
+  "title": "Evaluation Contract",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "contract_id", "rubric_sha256", "evaluator_prompt_sha256",
+    "model_id", "tool_policy_sha256", "hidden_test_suite_sha256",
+    "score_threshold", "max_iterations", "max_wall_clock_minutes"
+  ],
+  "properties": {
+    "contract_id": {"type": "string", "minLength": 1},
+    "rubric_sha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+    "evaluator_prompt_sha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+    "model_id": {"type": "string", "minLength": 1},
+    "model_snapshot": {"type": "string"},
+    "tool_policy_sha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+    "hidden_test_suite_sha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+    "score_threshold": {"type": "number", "minimum": 95, "maximum": 100},
+    "max_iterations": {"type": "integer", "minimum": 1, "maximum": 5},
+    "max_wall_clock_minutes": {"type": "integer", "minimum": 1, "maximum": 360}
+  }
+}

@@ -1,0 +1,20 @@
+{
+  "transport": "hermes-native-buzz-gateway",
+  "default_policy": "deny",
+  "identity_map": {
+    "REPLACE_WITH_OPERATOR_NOSTR_PUBLIC_KEY": {
+      "role": "operator",
+      "projects": ["nomad", "opensource", "business", "hynix"],
+      "commands": ["goal", "status", "evidence", "approve", "reject", "cancel", "resume"]
+    }
+  },
+  "threads": {
+    "require_project_binding": true,
+    "cross_project_continuation": "deny"
+  },
+  "secrets": {
+    "gateway_private_key_source": "root-readable-environment-file",
+    "allow_in_prompt": false,
+    "allow_in_logs": false
+  }
+}

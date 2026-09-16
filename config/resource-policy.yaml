@@ -1,0 +1,33 @@
+policy_version: resource-policy-v1
+
+laptop:
+  role: control-and-review-only
+  measured_ram_gib: 4.8
+  measured_cpu_threads: 4
+  forbidden_services:
+    - hermes-gateway
+    - codex-worker-daemon
+    - local-llm
+    - vector-database
+    - backtest-worker
+  max_local_codex_sessions: 1
+  max_local_subagents: 1
+  large_dataset_storage: forbidden
+  backtest_execution: forbidden
+
+hostinger_kvm2:
+  role: hermes-and-codex-runtime
+  measured_ram_gib: 7.8
+  measured_vcpu: 2
+  per_hermes_memory_max_mib: 768
+  per_hermes_cpu_quota_percent: 75
+  max_active_hermes_turns: 2
+  max_active_codex_workers: 1
+  disk_admission_stop_free_percent: 20
+  memory_queue_threshold_percent: 80
+
+future_finance_vps:
+  role: market-data-and-backtesting
+  required_before_live_or_heavy_backtests: true
+  shares_credentials_with_control_plane: false
+

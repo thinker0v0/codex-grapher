@@ -1,0 +1,30 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:ai-ops:schema:authorization-envelope:v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["decision", "policy_version", "subject_sha256", "requester_identity", "project_id", "builder_identity", "repo", "base_sha", "allowed_paths", "allowed_tools", "budget", "authorized_at", "expires_at"],
+  "properties": {
+    "decision": {"const": "allow"},
+    "policy_version": {"type": "string", "minLength": 1},
+    "subject_sha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+    "requester_identity": {"type": "string", "minLength": 1},
+    "project_id": {"type": "string", "enum": ["fin-global", "fin-korea", "hynix", "business", "oss"]},
+    "builder_identity": {"type": "string", "minLength": 1},
+    "repo": {"type": "string", "enum": ["codex_finance", "codex_hynix", "codex_business", "codex_opensource"]},
+    "base_sha": {"type": "string", "pattern": "^[a-f0-9]{40}$"},
+    "allowed_paths": {"type": "array", "minItems": 1, "items": {"type": "string"}},
+    "allowed_tools": {"type": "array", "minItems": 1, "items": {"type": "string"}},
+    "budget": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["max_cost_usd", "max_tokens"],
+      "properties": {
+        "max_cost_usd": {"type": "number", "exclusiveMinimum": 0},
+        "max_tokens": {"type": "integer", "exclusiveMinimum": 0}
+      }
+    },
+    "authorized_at": {"type": "string", "format": "date-time"},
+    "expires_at": {"type": "string", "format": "date-time"}
+  }
+}

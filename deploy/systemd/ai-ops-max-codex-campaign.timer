@@ -1,0 +1,12 @@
+[Unit]
+Description=Continue maximum-results Codex work every five minutes
+
+[Timer]
+OnBootSec=2min
+OnUnitActiveSec=5min
+Persistent=true
+RandomizedDelaySec=15s
+Unit=ai-ops-max-codex-campaign.service
+
+[Install]
+WantedBy=timers.target

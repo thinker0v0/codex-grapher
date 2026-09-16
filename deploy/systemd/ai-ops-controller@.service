@@ -1,0 +1,32 @@
+[Unit]
+Description=Privileged AI Ops task controller for %i
+After=local-fs.target
+
+[Service]
+Type=simple
+User=root
+Group=ai-ops-controller
+ExecStart=/usr/local/libexec/ai-ops/controller-service --profile %i --db /var/lib/ai-ops/%i/tasks.db --socket /run/ai-ops-%i/controller.sock
+Restart=on-failure
+RestartSec=2
+RuntimeDirectory=ai-ops-%i
+RuntimeDirectoryMode=0755
+UMask=0077
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictSUIDSGID=true
+LockPersonality=true
+CapabilityBoundingSet=CAP_CHOWN CAP_DAC_OVERRIDE
+RestrictAddressFamilies=AF_UNIX
+SystemCallArchitectures=native
+MemoryMax=128M
+TasksMax=64
+ReadWritePaths=/var/lib/ai-ops /run/ai-ops-%i /srv/hermes/%i/runtime/authorizations
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,40 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:ai-ops:schema:evidence-envelope:v1",
+  "title": "Evidence Envelope",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "evidence_id", "type", "producer", "git_sha", "run_id",
+    "started_at", "completed_at", "environment", "exit_code",
+    "result", "artifact_hashes", "signature"
+  ],
+  "properties": {
+    "evidence_id": {"type": "string", "minLength": 1},
+    "type": {"enum": ["ci_test", "gameday", "restore", "security_scan", "legal_e2e", "backtest", "data_quality", "license_review", "model_eval"]},
+    "producer": {"type": "string", "minLength": 1},
+    "producer_identity": {"type": "string"},
+    "git_sha": {"type": "string", "minLength": 7},
+    "workflow_ref": {"type": "string"},
+    "run_id": {"type": "string", "minLength": 1},
+    "started_at": {"type": "string", "format": "date-time"},
+    "completed_at": {"type": "string", "format": "date-time"},
+    "environment": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["image_digest", "dependency_lock_hash", "config_hash"],
+      "properties": {
+        "image_digest": {"type": "string"},
+        "dependency_lock_hash": {"type": "string"},
+        "dataset_snapshot": {"type": "string"},
+        "config_hash": {"type": "string"}
+      }
+    },
+    "command": {"type": "string"},
+    "exit_code": {"type": "integer"},
+    "result": {"enum": ["PASS", "FAIL", "ERROR"]},
+    "metrics": {"type": "object"},
+    "artifact_hashes": {"type": "object"},
+    "signature": {"type": "string", "minLength": 1}
+  }
+}

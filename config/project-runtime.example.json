@@ -1,0 +1,33 @@
+{
+  "version": 1,
+  "projects": {
+    "nomad": {
+      "worker_project_id": "fin-korea",
+      "repo": "/srv/hermes/fin-korea/workspace",
+      "binding": "/srv/hermes/fin-korea/runtime/repo-binding.json",
+      "evidence_root": "/srv/hermes/evaluator/artifacts/nomad",
+      "accepted_ref": "refs/ai-ops/accepted/nomad"
+    },
+    "opensource": {
+      "worker_project_id": "oss",
+      "repo": "/srv/hermes/oss/workspace",
+      "binding": "/srv/hermes/oss/runtime/repo-binding.json",
+      "evidence_root": "/srv/hermes/evaluator/artifacts/opensource",
+      "accepted_ref": "refs/ai-ops/accepted/opensource"
+    },
+    "business": {
+      "worker_project_id": "business",
+      "repo": "/srv/hermes/business/workspace",
+      "binding": "/srv/hermes/business/runtime/repo-binding.json",
+      "evidence_root": "/srv/hermes/evaluator/artifacts/business",
+      "accepted_ref": "refs/ai-ops/accepted/business"
+    },
+    "hynix": {
+      "worker_project_id": "hynix",
+      "repo": "/srv/hermes/hynix/workspace",
+      "binding": "/srv/hermes/hynix/runtime/repo-binding.json",
+      "evidence_root": "/srv/hermes/evaluator/artifacts/hynix",
+      "accepted_ref": "refs/ai-ops/accepted/hynix"
+    }
+  }
+}

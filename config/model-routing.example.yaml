@@ -1,0 +1,81 @@
+policy_version: model-routing-v1
+selection_status: benchmark-required
+
+candidates:
+  planner_primary:
+    provider: opencode-free
+    model: x-preview-f-free
+    billing: keyless-free
+    status: operational-selected
+    region: us
+  architect_challenger:
+    provider: alibaba
+    model: glm-5.2
+    billing: model-studio-pay-as-you-go
+    status: blocked-unpurchased
+  financial_critic_challenger:
+    provider: alibaba
+    model: deepseek-v4-pro
+    billing: model-studio-pay-as-you-go
+    status: blocked-unpurchased
+  planner_subscription:
+    provider: zai
+    model: coding-plan-model
+    billing: coding-plan-subscription
+    status: blocked-pending-written-provider-approval
+  critic_primary:
+    provider: openai
+    model: gpt-5.6-terra
+    reasoning_effort: high
+    status: candidate
+  critic_escalation:
+    provider: openai
+    model: gpt-5.6-sol
+    reasoning_effort: xhigh
+    status: candidate
+  codex_complex:
+    provider: openai-codex-cli
+    model: gpt-5.6-sol
+    reasoning_effort: high
+    status: candidate
+  codex_routine:
+    provider: openai-codex-cli
+    model: gpt-5.6-terra
+    reasoning_effort: medium
+    status: candidate
+  codex_triage:
+    provider: openai-codex-cli
+    model: gpt-5.6-luna
+    reasoning_effort: low
+    status: candidate
+
+benchmark:
+  minimum_tasks_per_project: 20
+  repeated_runs: 3
+  required_metrics:
+    - acceptance_pass_rate
+    - tool_call_success_rate
+    - hallucination_rate
+    - instruction_retention
+    - p50_latency
+    - p95_latency
+    - p99_latency
+    - cost_per_accepted_task
+  promotion_requires_blind_review: true
+  reevaluate_on_model_or_prompt_change: true
+  reevaluate_at_least_quarterly: true
+
+fallback:
+  allowlisted_only: true
+  reset_to_primary_each_turn: true
+  delegation_has_no_automatic_fallback: true
+  cron_has_no_automatic_fallback: true
+  terminal_failure: needs_human
+
+hermes_constraints:
+  delegation_provider_auto_literal_forbidden: true
+  shared_custom_provider_base_urls_forbidden: true
+  parent_and_codex_executor_credentials_separate: true
+  monthly_model_budget_usd: 80
+  budget_warning_usd: [50, 70]
+  hard_stop_at_budget: true

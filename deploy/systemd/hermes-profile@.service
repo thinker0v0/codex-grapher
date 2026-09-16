@@ -1,0 +1,57 @@
+[Unit]
+Description=Hermes Agent profile %i
+After=network-online.target ai-ops-controller@%i.service
+Wants=network-online.target ai-ops-controller@%i.service
+
+[Service]
+Type=simple
+User=hermes-%i
+Group=hermes-%i
+Environment=HERMES_PROFILE=%i
+EnvironmentFile=/etc/hermes/%i.env
+ExecStart=/usr/local/libexec/ai-ops/run-hermes-profile %i
+Restart=on-failure
+RestartSec=5s
+TimeoutStartSec=60s
+TimeoutStopSec=30s
+KillMode=mixed
+UMask=0077
+
+NoNewPrivileges=true
+PrivateTmp=true
+PrivateDevices=true
+ProtectSystem=strict
+ProtectHome=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectKernelLogs=true
+ProtectControlGroups=true
+ProtectClock=true
+ProtectHostname=true
+ProtectProc=invisible
+ProcSubset=pid
+RestrictSUIDSGID=true
+RestrictRealtime=true
+LockPersonality=true
+MemoryDenyWriteExecute=true
+CapabilityBoundingSet=
+AmbientCapabilities=
+# Bubblewrap uses NETLINK_ROUTE inside its unprivileged network namespace to
+# initialize loopback for Codex workspace-write sandboxes. No host network
+# administration capability is granted by this address-family allowance.
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6 AF_NETLINK
+SystemCallArchitectures=native
+SystemCallFilter=@system-service
+
+ReadWritePaths=/srv/hermes/%i
+ReadOnlyPaths=/etc/hermes
+RuntimeDirectory=hermes-%i
+StateDirectory=hermes-%i
+LogsDirectory=hermes-%i
+
+MemoryMax=768M
+TasksMax=128
+CPUQuota=75%
+
+[Install]
+WantedBy=multi-user.target

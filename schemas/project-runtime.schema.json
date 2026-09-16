@@ -1,0 +1,84 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:ai-ops:schema:project-runtime:v1",
+  "title": "Operator-supplied project graph runtime",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["version", "projects"],
+  "properties": {
+    "version": {"const": 1},
+    "projects": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["nomad", "opensource", "business", "hynix"],
+      "properties": {
+        "nomad": {"$ref": "#/$defs/nomad"},
+        "opensource": {"$ref": "#/$defs/opensource"},
+        "business": {"$ref": "#/$defs/business"},
+        "hynix": {"$ref": "#/$defs/hynix"}
+      }
+    }
+  },
+  "$defs": {
+    "entry": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["worker_project_id", "repo", "binding", "evidence_root", "accepted_ref"],
+      "properties": {
+        "worker_project_id": {"type": "string", "minLength": 1},
+        "repo": {"type": "string", "pattern": "^/[^\\u0000]+$"},
+        "binding": {"type": "string", "pattern": "^/[^\\u0000]+$"},
+        "evidence_root": {"type": "string", "pattern": "^/[^\\u0000]+$"},
+        "accepted_ref": {"type": "string", "pattern": "^refs/ai-ops/accepted/[a-z]+$"}
+      }
+    },
+    "nomad": {
+      "allOf": [
+        {"$ref": "#/$defs/entry"},
+        {"properties": {
+          "worker_project_id": {"const": "fin-korea"},
+          "repo": {"const": "/srv/hermes/fin-korea/workspace"},
+          "binding": {"const": "/srv/hermes/fin-korea/runtime/repo-binding.json"},
+          "evidence_root": {"const": "/srv/hermes/evaluator/artifacts/nomad"},
+          "accepted_ref": {"const": "refs/ai-ops/accepted/nomad"}
+        }}
+      ]
+    },
+    "opensource": {
+      "allOf": [
+        {"$ref": "#/$defs/entry"},
+        {"properties": {
+          "worker_project_id": {"const": "oss"},
+          "repo": {"const": "/srv/hermes/oss/workspace"},
+          "binding": {"const": "/srv/hermes/oss/runtime/repo-binding.json"},
+          "evidence_root": {"const": "/srv/hermes/evaluator/artifacts/opensource"},
+          "accepted_ref": {"const": "refs/ai-ops/accepted/opensource"}
+        }}
+      ]
+    },
+    "business": {
+      "allOf": [
+        {"$ref": "#/$defs/entry"},
+        {"properties": {
+          "worker_project_id": {"const": "business"},
+          "repo": {"const": "/srv/hermes/business/workspace"},
+          "binding": {"const": "/srv/hermes/business/runtime/repo-binding.json"},
+          "evidence_root": {"const": "/srv/hermes/evaluator/artifacts/business"},
+          "accepted_ref": {"const": "refs/ai-ops/accepted/business"}
+        }}
+      ]
+    },
+    "hynix": {
+      "allOf": [
+        {"$ref": "#/$defs/entry"},
+        {"properties": {
+          "worker_project_id": {"const": "hynix"},
+          "repo": {"const": "/srv/hermes/hynix/workspace"},
+          "binding": {"const": "/srv/hermes/hynix/runtime/repo-binding.json"},
+          "evidence_root": {"const": "/srv/hermes/evaluator/artifacts/hynix"},
+          "accepted_ref": {"const": "refs/ai-ops/accepted/hynix"}
+        }}
+      ]
+    }
+  }
+}

@@ -1,0 +1,45 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Native-like Buzz fixture event envelope (not production crypto or staging evidence)",
+  "$comment": "The adapter additionally recomputes the canonical event ID, enforces freshness, and calls an injected verifier. Local fixture signatures do not prove HG10.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["id", "pubkey", "created_at", "kind", "tags", "content", "sig"],
+  "properties": {
+    "id": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "pubkey": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "created_at": {"type": "integer", "minimum": 0},
+    "kind": {"const": 42},
+    "tags": {
+      "type": "array",
+      "minItems": 2,
+      "maxItems": 2,
+      "prefixItems": [
+        {
+          "type": "array",
+          "prefixItems": [
+            {"const": "e"},
+            {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+            {"const": ""},
+            {"const": "root"}
+          ],
+          "minItems": 4,
+          "maxItems": 4
+        },
+        {
+          "type": "array",
+          "prefixItems": [
+            {"const": "e"},
+            {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+            {"const": ""},
+            {"const": "reply"}
+          ],
+          "minItems": 4,
+          "maxItems": 4
+        }
+      ]
+    },
+    "content": {"type": "string", "maxLength": 8192},
+    "sig": {"type": "string", "pattern": "^[0-9a-f]{128}$"}
+  }
+}

@@ -1,0 +1,30 @@
+{
+  "schema_version": "1",
+  "test": "vps-controller-isolation",
+  "executed_at": "2026-08-23T03:36:59Z",
+  "evaluated_git_sha": "4ec8f2c4bc8baf0a005d7ee6454b0e7e0f121f66",
+  "environment": {"host_class": "Hostinger KVM2"},
+  "deployed_file_hashes": {
+    "scripts/verify-vps-controller-isolation.sh": "0a0c53a6f162ede04e6863dd8a6622b3ea195a9777777aa95ee3f39d442a15ce",
+    "/usr/local/libexec/ai-ops/controller-service": "a3f5ecf3b75ac736ce2194a72d3b9a3e28fb42a1267a044f207127e264ce02a6",
+    "/usr/local/libexec/ai-ops/controller-client": "28d224ba1858cf3993504389d724e64c8b60d25b1b8abde19ab60c051161ea74",
+    "/etc/systemd/system/ai-ops-controller@.service": "4d69a4187bd7cb50af2742b25ba29c3c1543937395fa030bc2fd6faa4f0dde37",
+    "/usr/local/libexec/ai-ops/run-codex-worker": "b57119034e2f2ad8874b62d9c162c0df87bbb36761029db5d7fab059abf12a15"
+  },
+  "results": {
+    "all_five_services_active": true,
+    "all_databases_root_owned_0600": true,
+    "all_sockets_root_owned_0660": true,
+    "builder_database_read_denied": true,
+    "direct_controller_denied": true,
+    "builder_self_certification_denied": true,
+    "cross_project_controller_denied": true,
+    "evaluator_usage_forgery_denied": true,
+    "systemd_security_exposure": "4.7 OK"
+  },
+  "pass": true,
+  "limitations": [
+    "This packet does not prove process-descendant cancellation or evaluator-led completion.",
+    "It does not cover Slack authentication, model benchmarking, or financial data gates."
+  ]
+}

@@ -1,0 +1,16 @@
+{
+  "surface": "native-like-fixture-only",
+  "production_use": "forbidden",
+  "result_label": "FIXTURE_PASS",
+  "hg10": "UNPROVEN",
+  "event_kind": 42,
+  "max_age_seconds": 300,
+  "max_future_skew_seconds": 30,
+  "max_content_bytes": 8192,
+  "channel_routes": {
+    "5b927f671a4380ba629daf5ac194c7e0870b1067670e5e978d49af341c7149e2": "nomad",
+    "39fda05631ec7b5a78c8d8110ea0e21505082af5b07ba36925a97596ee19db40": "opensource",
+    "0b473c382082ba5995e1bd2c57b1a3856b5e2f6ad46a1f11ae28766b3b9c6b95": "business",
+    "8333f98fc53d439151bfb79aeb624bb6a477cbbbb5f1ae843446bd99de747ae9": "hynix"
+  }
+}

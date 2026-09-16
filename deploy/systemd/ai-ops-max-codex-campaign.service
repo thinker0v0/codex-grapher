@@ -1,0 +1,30 @@
+[Unit]
+Description=Advance the four-route maximum-results Codex campaign
+After=network-online.target ai-ops-project-router.service
+Wants=network-online.target ai-ops-project-router.service
+
+[Service]
+Type=oneshot
+User=hermes-oss
+Group=hermes-oss
+ExecStart=/usr/local/libexec/ai-ops/run-max-codex-campaign
+KillMode=process
+UMask=0077
+
+NoNewPrivileges=true
+PrivateTmp=true
+PrivateDevices=true
+ProtectSystem=strict
+ProtectHome=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectKernelLogs=true
+ProtectControlGroups=true
+RestrictSUIDSGID=true
+LockPersonality=true
+CapabilityBoundingSet=
+RestrictAddressFamilies=AF_UNIX
+ReadWritePaths=/srv/hermes/oss/.hermes/campaign
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,36 @@
+[Unit]
+Description=Root-owned verified adaptive project graph
+After=local-fs.target
+Before=ai-ops-project-router.service
+
+[Service]
+Type=simple
+User=root
+Group=ai-ops-graph
+Environment=PYTHONPATH=/usr/local/lib/ai-ops
+RuntimeDirectory=ai-ops-graph
+RuntimeDirectoryMode=0750
+StateDirectory=ai-ops-graph
+StateDirectoryMode=0700
+ExecStart=/usr/local/libexec/ai-ops/project-graph-service --socket /run/ai-ops-graph/control.sock --database /var/lib/ai-ops-graph/graphs.sqlite --templates /etc/ai-ops/project-graphs.json --runtime /etc/ai-ops/project-runtime.json --evaluator-public-key /etc/ai-ops/evaluator-public.pem --rubric /etc/ai-ops/RUBRIC.md
+Restart=on-failure
+RestartSec=2
+UMask=0077
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ProtectKernelTunables=true
+ProtectControlGroups=true
+RestrictSUIDSGID=true
+ReadOnlyPaths=/etc/ai-ops
+InaccessiblePaths=/etc/ai-ops/authorization-private.pem /etc/ai-ops/evaluator-private.pem /etc/hermes
+ReadWritePaths=/run/ai-ops-graph /var/lib/ai-ops-graph /srv/hermes/evaluator/artifacts /srv/hermes/fin-korea/workspace /srv/hermes/fin-korea/runtime /srv/hermes/oss/workspace /srv/hermes/oss/runtime /srv/hermes/business/workspace /srv/hermes/business/runtime /srv/hermes/hynix/workspace /srv/hermes/hynix/runtime
+RestrictAddressFamilies=AF_UNIX
+CapabilityBoundingSet=CAP_CHOWN CAP_DAC_OVERRIDE
+LockPersonality=true
+MemoryDenyWriteExecute=true
+SystemCallArchitectures=native
+
+[Install]
+WantedBy=multi-user.target

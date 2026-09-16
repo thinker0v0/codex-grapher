@@ -1,0 +1,50 @@
+[Unit]
+Description=Independent Hermes evaluator
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=hermes-evaluator
+Group=hermes-evaluator
+EnvironmentFile=/etc/hermes/evaluator.env
+ExecStart=/usr/local/libexec/ai-ops/run-hermes-profile evaluator
+Restart=on-failure
+RestartSec=5s
+UMask=0077
+
+NoNewPrivileges=true
+PrivateTmp=true
+PrivateDevices=true
+ProtectSystem=strict
+ProtectHome=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectKernelLogs=true
+ProtectControlGroups=true
+ProtectClock=true
+ProtectHostname=true
+ProtectProc=invisible
+ProcSubset=pid
+RestrictSUIDSGID=true
+RestrictRealtime=true
+LockPersonality=true
+MemoryDenyWriteExecute=true
+CapabilityBoundingSet=
+AmbientCapabilities=
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+SystemCallArchitectures=native
+SystemCallFilter=@system-service
+
+ReadOnlyPaths=/srv/hermes/evaluator/source /srv/hermes/evaluator/artifacts /etc/hermes
+ReadWritePaths=/srv/hermes/evaluator/runtime /srv/hermes/evaluator/ledger-spool
+RuntimeDirectory=hermes-evaluator
+StateDirectory=hermes-evaluator
+LogsDirectory=hermes-evaluator
+
+MemoryMax=768M
+TasksMax=96
+CPUQuota=50%
+
+[Install]
+WantedBy=multi-user.target

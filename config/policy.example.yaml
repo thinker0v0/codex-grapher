@@ -1,0 +1,35 @@
+execution:
+  default_sandbox: workspace-write
+  approval: on-request
+  max_iterations: 5
+  max_wall_clock_minutes: 360
+  max_retries: 2
+  require_idempotency_key: true
+
+slack:
+  allow_all_users: false
+  require_channel_allowlist: true
+  task_thread_required: true
+  forbidden_actions:
+    - enable_live_trading
+    - increase_risk_limit
+    - disable_kill_switch
+    - withdraw_funds
+    - reveal_secrets
+
+evaluator:
+  source_access: read-only
+  artifact_access: read-only
+  ledger_access: append-only
+  source_write: false
+  merge: false
+  deploy: false
+  mutate_rubric: false
+  blind_second_review_score: 95
+
+financial:
+  research_has_live_credentials: false
+  codex_has_live_credentials: false
+  hermes_has_live_credentials: false
+  stale_data_action: no-trade
+  restart_action: manual-reconciliation

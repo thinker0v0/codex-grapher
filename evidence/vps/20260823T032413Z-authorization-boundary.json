@@ -1,0 +1,31 @@
+{
+  "schema_version": "1",
+  "test": "vps-authorization-boundary",
+  "run_id": "20260823T032413Z-18413",
+  "executed_at": "2026-08-23T03:24:13Z",
+  "evaluated_git_sha": "63b3eb0ae94f679a5be58fc64052ef80a42d0ae4",
+  "environment": {
+    "host_class": "Hostinger KVM2",
+    "kernel": "Linux 6.8.0-137-generic x86_64 GNU/Linux",
+    "codex_version": "codex-cli 0.149.0",
+    "hermes_version": "0.20.5 (2026.8.19)"
+  },
+  "deployed_file_hashes": {
+    "scripts/verify-vps-authorization-boundary.sh": "1b9a543480d689db058928415e215da699ff6eba175b784aba5f6b5918399f0f",
+    "/usr/local/libexec/ai-ops/run-codex-worker": "e96691b43dd8e738f9641fed21a24f1633bdcef5961cc2723fe0018c2cb42a5b",
+    "/usr/local/libexec/ai-ops/task-controller": "186c0a6eb0460289e74270dec93abb634c844c1540fa219ccfc552d6f4a2979d",
+    "/usr/local/libexec/ai-ops/authorization-issuer": "0cc2c70e9963f2de625ca35696e537cca35a2719738dc66b48ead23b71158c0f"
+  },
+  "authorization_evidence_sha256": "62aae7261ffaf2caffdbe3c36be0585d495f96eb5501418dfbd49046dcf003c7",
+  "results": {
+    "signature_verified": true,
+    "mutation_denied_before_submit": true,
+    "wrong_sha_denied_before_submit": true,
+    "wrong_profile_denied_before_submit": true
+  },
+  "pass": true,
+  "limitations": [
+    "This packet proves only the authorization boundary cases named above.",
+    "Slack, authenticated Codex execution, evaluator completion, and model routing are not covered."
+  ]
+}

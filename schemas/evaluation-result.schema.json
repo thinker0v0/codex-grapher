@@ -1,0 +1,49 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:ai-ops:schema:evaluation-result:v3",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["evaluation_id", "task_id", "contract_id", "artifact_id", "claim_id", "evaluated_git_sha", "evidence_manifest_sha256", "rubric_sha256", "section_scores", "mandatory_gates", "total_score", "verdict", "evaluator_identity", "previous_ledger_hash", "ledger_hash", "signature"],
+  "properties": {
+    "evaluation_id": {"type": "string", "minLength": 1},
+    "task_id": {"type": "string", "minLength": 1},
+    "contract_id": {"type": "string", "minLength": 1},
+    "artifact_id": {"type": "string", "pattern": "^sha256:[a-f0-9]{64}$"},
+    "claim_id": {"type": "string", "pattern": "^claim:[a-f0-9]{64}$"},
+    "evaluated_git_sha": {"type": "string", "pattern": "^[a-f0-9]{40}$"},
+    "evidence_manifest_sha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+    "rubric_sha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+    "section_scores": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["problem_and_evidence", "graph_architecture_and_maximum_results_policy", "durability_and_recovery", "verification_evaluation_and_cumulative_integration", "finance_and_consequential_action_safety", "buzz_identity_and_security_boundaries", "operator_ux_and_observability", "tests_and_representative_evidence"],
+      "properties": {
+        "problem_and_evidence": {"type": "number", "minimum": 8, "maximum": 10},
+        "graph_architecture_and_maximum_results_policy": {"type": "number", "minimum": 17, "maximum": 18},
+        "durability_and_recovery": {"type": "number", "minimum": 11, "maximum": 12},
+        "verification_evaluation_and_cumulative_integration": {"type": "number", "minimum": 17, "maximum": 18},
+        "finance_and_consequential_action_safety": {"type": "number", "minimum": 15, "maximum": 15},
+        "buzz_identity_and_security_boundaries": {"type": "number", "minimum": 11, "maximum": 12},
+        "operator_ux_and_observability": {"type": "number", "minimum": 7, "maximum": 8},
+        "tests_and_representative_evidence": {"type": "number", "minimum": 7, "maximum": 7}
+      }
+    },
+    "mandatory_gates": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["HG1", "HG2", "HG3", "HG4", "HG5", "HG6", "HG7", "HG8", "HG9", "HG10", "HG11"],
+      "properties": {
+        "HG1": {"const": "PASS"}, "HG2": {"const": "PASS"}, "HG3": {"const": "PASS"},
+        "HG4": {"const": "PASS"}, "HG5": {"const": "PASS"}, "HG6": {"const": "PASS"},
+        "HG7": {"const": "PASS"}, "HG8": {"const": "PASS"}, "HG9": {"const": "PASS"},
+        "HG10": {"const": "PASS"}, "HG11": {"const": "PASS"}
+      }
+    },
+    "total_score": {"type": "number", "minimum": 95, "maximum": 100},
+    "verdict": {"const": "PASS"},
+    "evaluator_identity": {"const": "hermes-evaluator"},
+    "previous_ledger_hash": {"type": ["string", "null"], "pattern": "^[a-f0-9]{64}$"},
+    "ledger_hash": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+    "signature": {"type": "string", "minLength": 1}
+  }
+}

@@ -1,0 +1,23 @@
+[Unit]
+Description=Back up non-secret Hermes control-plane configuration
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/libexec/ai-ops/backup-hermes-config
+UMask=0077
+NoNewPrivileges=true
+PrivateTmp=true
+PrivateDevices=true
+ProtectSystem=strict
+ProtectHome=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectKernelLogs=true
+ProtectControlGroups=true
+RestrictSUIDSGID=true
+LockPersonality=true
+CapabilityBoundingSet=CAP_DAC_READ_SEARCH
+ReadOnlyPaths=/srv/hermes /etc/systemd/system
+StateDirectory=hermes-control-plane-backup
+StateDirectoryMode=0700
+ReadWritePaths=/var/lib/hermes-control-plane-backup
