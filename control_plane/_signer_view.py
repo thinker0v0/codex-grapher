@@ -13,6 +13,7 @@ import hashlib
 import json
 import os
 from pathlib import Path
+import re
 import sqlite3
 import stat
 import tempfile
@@ -73,8 +74,16 @@ def _selection(relative, names):
     elif relative == ".broker-receipts":
         required = {"receipts", "rejections"}
     else:
-        required = {name for name in names if name != ".private"
-                    and name != ".lock" and not name.endswith(".lock")}
+        parts = relative.split("/")
+        git_metadata = parts[:2] == ["canonical", ".git"] or (
+            len(parts) >= 3 and parts[0] == "publications"
+            and re.fullmatch(r"[a-f0-9]{40}", parts[1]) is not None
+            and parts[2] == ".git"
+        )
+        # Lockfile names and .private are legitimate tracked source paths.
+        # Runtime exclusions belong to the explicit domains above, or to Git's
+        # metadata directory, whose inert configuration is verified after copy.
+        required = {name for name in names if not (git_metadata and name.endswith(".lock"))}
     if not required <= names:
         raise SignerViewError("public signer input is incomplete")
     return sorted(required)

@@ -41,6 +41,43 @@ SCENARIOS = ["provision", "boot-reboot", "restore"] + [
 ]
 ENVIRONMENT = {"PATH": "/usr/bin:/bin", "LANG": "C.UTF-8", "LC_ALL": "C.UTF-8"}
 
+# The source archive has file members only. Tar creates their parent directories
+# using the guest caller's umask, so merely removing write bits is insufficient:
+# 0700 becomes 0500 and prevents the dropped roles from reading trusted code.
+# This fixed program operates only on our explicit installed public source tree.
+PUBLIC_TREE_MODE_PROGRAM = """import os, stat, sys
+from pathlib import Path
+root = Path(sys.argv[1])
+entries = [root, *root.rglob('*')]
+for path in entries:
+    mode = path.lstat().st_mode
+    if not (stat.S_ISDIR(mode) or stat.S_ISREG(mode)):
+        raise RuntimeError('public install contains a link or special entry')
+for path in entries:
+    mode = path.lstat().st_mode
+    os.chmod(path, 0o555 if stat.S_ISDIR(mode) or mode & 0o111 else 0o444)
+"""
+
+
+def make_public_directory(path: Path) -> None:
+    """Give only newly created task-owned public directories explicit modes."""
+    missing = []
+    current = path
+    while not current.exists():
+        missing.append(current)
+        current = current.parent
+    if not current.is_dir():
+        raise NotADirectoryError(current)
+    for directory in reversed(missing):
+        try:
+            directory.mkdir(mode=0o755)
+        except FileExistsError:
+            if not directory.is_dir():
+                raise NotADirectoryError(directory) from None
+            # Another owner created it. Never chmod an existing arbitrary path.
+        else:
+            directory.chmod(0o755)
+
 
 def digest(path: Path, algorithm: str = "sha256") -> str:
     with path.open("rb") as stream:
@@ -107,9 +144,9 @@ class Harness:
             os.chown(self.runtime, 0, args.qemu_gid)
             self.runtime.chmod(0o750)
         self.cache = (args.cache or self.runtime / "cache").resolve()
-        self.cache.mkdir(parents=True, exist_ok=True)
+        make_public_directory(self.cache)
         self.local = self.runtime / "qemu-root"
-        self.local.mkdir(exist_ok=True)
+        make_public_directory(self.local)
         self.key_dir = self.runtime / "keys"
         self.key_dir.mkdir(exist_ok=True, mode=0o700)
         self.key_dir.chmod(0o700)
@@ -468,7 +505,9 @@ class Harness:
                 self.report["source"]["files"][relative] = digest(path)
                 target.add(path, arcname=relative, recursive=False)
         self.transfer(archive, "/tmp/grapher-public-source.tar")
-        self.ssh("sudo -n mkdir -p /opt/codex-grapher && sudo -n tar --no-same-owner -xf /tmp/grapher-public-source.tar -C /opt/codex-grapher && sudo -n chmod -R a-w /opt/codex-grapher", timeout=30)
+        self.ssh("sudo -n mkdir -p /opt/codex-grapher && sudo -n tar --no-same-owner -xf /tmp/grapher-public-source.tar -C /opt/codex-grapher", timeout=30)
+        self.ssh(shlex.join(["sudo", "-n", "/usr/bin/python3", "-I", "-c",
+            PUBLIC_TREE_MODE_PROGRAM, GUEST_CODE]), timeout=30)
         self.save()
 
     def provision(self):

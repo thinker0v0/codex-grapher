@@ -249,6 +249,49 @@ class ActualExecutionRoleTests(unittest.TestCase):
         for name, role in evidence["roles"].items():
             self.assertEqual(role["supervisor_observation"]["actual_uid"], self.profile.roles[name].uid)
 
+    def test_private_caller_umask_keeps_role_devices_usable_and_output_private(self):
+        devices = {name: os.stat(name) for name in ("/dev/null", "/dev/urandom")}
+        previous = os.umask(0o077)
+        try:
+            code = """
+import json,os,pathlib,stat
+mask=os.umask(0o077);os.umask(mask)
+with open('/dev/null','r+b',buffering=0) as stream:
+    assert stream.write(b'inert probe') == 11
+    assert stream.read(1) == b''
+with open('/dev/urandom','rb',buffering=0) as stream:
+    assert len(stream.read(8)) == 8
+output=pathlib.Path('/tmp/private-output');output.write_text('inert')
+try:
+    pathlib.Path('/dev/forbidden-role-file').write_text('must not write')
+except PermissionError:
+    denied=True
+else:
+    denied=False
+null=os.stat('/dev/null')
+print(json.dumps({'mask':mask,'output_mode':stat.S_IMODE(output.stat().st_mode),
+                  'dev_mode':stat.S_IMODE(os.stat('/dev').st_mode),'dev_write_denied':denied,
+                  'null_identity':[null.st_dev,null.st_ino,null.st_mode]}))
+"""
+            for name in self.profile.roles:
+                with self.subTest(role=name):
+                    result = runner.run_role_process(self.profile, name,
+                        [self.profile.tools["python"].path, "-I", "-B", "-c", code])
+                    self.assertEqual(result.returncode, 0, result.stderr.decode())
+                    self.assertTrue(result.descendants_reaped)
+                    self.assertEqual(json.loads(result.stdout), {
+                        "mask": 0o077, "output_mode": 0o600,
+                        "dev_mode": 0o755, "dev_write_denied": True,
+                        "null_identity": [devices["/dev/null"].st_dev, devices["/dev/null"].st_ino, devices["/dev/null"].st_mode]})
+                    self.assertEqual(result.observation["actual_uid"], self.profile.roles[name].uid)
+                    self.assertEqual(os.umask(0o077), 0o077, "launcher changed parent umask")
+            for name, before in devices.items():
+                after = os.stat(name)
+                self.assertEqual((after.st_dev, after.st_ino, after.st_mode),
+                                 (before.st_dev, before.st_ino, before.st_mode))
+        finally:
+            os.umask(previous)
+
     def test_timeout_kills_actual_namespace_and_reports_cleanup(self):
         result = self.run_python("import time;time.sleep(60)", timeout_seconds=1)
         self.assertTrue(result.timed_out)

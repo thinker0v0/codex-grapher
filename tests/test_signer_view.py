@@ -4,8 +4,10 @@ import hashlib
 import json
 import os
 from pathlib import Path
+import shutil
 import socket
 import stat
+import subprocess
 import tempfile
 from types import SimpleNamespace
 import unittest
@@ -36,7 +38,8 @@ class SignerViewTests(unittest.TestCase):
         (self.root / "evidence/public-output").write_bytes(b"sealed output\n")
         (self.root / "publications/retained").write_bytes(b"retained generation\n")
         for name in ("attempts/private-prompt", "worker-output/unadmitted",
-                     ".broker-receipts/.private/reservation", "state/.workflow.lock"):
+                     ".broker-receipts/.private/reservation", ".broker-receipts/.lock",
+                     "state/.workflow.lock", "state/graph.sqlite.owner.lock"):
             (self.root / name).write_bytes(b"excluded private runtime bytes\n")
         self.profile = SimpleNamespace(
             roles={"graph": SimpleNamespace(uid=20003, gid=20003),
@@ -75,7 +78,8 @@ class SignerViewTests(unittest.TestCase):
             self.assertEqual((binding.st_uid, binding.st_gid, stat.S_IMODE(binding.st_mode)), (20003, 20002, 0o440))
             self.assertEqual(stat.S_IMODE((view / "state/graph.sqlite").stat().st_mode), 0o444)
             self.assertEqual(stat.S_IMODE((view / "state").stat().st_mode), 0o755)
-            for name in ("attempts", "worker-output", ".broker-receipts/.private", "state/.workflow.lock"):
+            for name in ("attempts", "worker-output", ".broker-receipts/.private",
+                         ".broker-receipts/.lock", "state/.workflow.lock", "state/graph.sqlite.owner.lock"):
                 self.assertFalse((view / name).exists())
             manifest_path = view.parent / "view-manifest.json"
             manifest = json.loads(manifest_path.read_bytes())
@@ -86,14 +90,69 @@ class SignerViewTests(unittest.TestCase):
         self.assertFalse(view.exists())
         self.assertEqual(self.source_inventory(), before)
 
-    def test_socket_and_lock_are_not_copied(self):
+    def test_socket_and_git_metadata_lock_are_not_copied(self):
         endpoint = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
         self.addCleanup(endpoint.close)
         endpoint.bind(str(self.root / "canonical/runtime.sock"))
-        (self.root / "canonical/index.lock").write_bytes(b"transient")
+        metadata = self.root / "canonical/.git"
+        metadata.mkdir()
+        (metadata / "config").write_text("[core]\nrepositoryformatversion = 0\nbare = false\n")
+        (metadata / "index.lock").write_bytes(b"transient")
         with signer_view(self.root, self.profile) as view:
             self.assertFalse((view / "canonical/runtime.sock").exists())
-            self.assertFalse((view / "canonical/index.lock").exists())
+            self.assertFalse((view / "canonical/.git/index.lock").exists())
+
+    def test_tracked_lockfiles_and_private_names_survive_canonical_and_publication_copy(self):
+        repository = self.root / "canonical"
+        tracked = {
+            "Cargo.lock": b"frozen Rust dependency graph\n",
+            "uv.lock": b"frozen Python dependency graph\n",
+            ".lock": b"ordinary tracked dotfile\n",
+            "index.lock": b"ordinary tracked worktree lockfile\n",
+            ".private/tracked.txt": b"ordinary tracked source directory\n",
+            ".git-data/index.lock": b"ordinary tracked Git-like directory\n",
+            "src/index.lock": b"ordinary tracked nested lockfile\n",
+        }
+        for relative, data in tracked.items():
+            path = repository / relative
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_bytes(data)
+
+        def git(root, *arguments):
+            return subprocess.run(
+                ["git", "-C", str(root), *arguments], check=True, capture_output=True,
+                env={**os.environ, "GIT_CONFIG_NOSYSTEM": "1", "GIT_CONFIG_GLOBAL": os.devnull,
+                     "GIT_OPTIONAL_LOCKS": "0", "GIT_TERMINAL_PROMPT": "0"},
+            ).stdout
+
+        git(repository, "init", "-q")
+        git(repository, "config", "user.name", "Signer view fixture")
+        git(repository, "config", "user.email", "signer@example.invalid")
+        git(repository, "config", "core.hooksPath", os.devnull)
+        git(repository, "add", ".")
+        git(repository, "commit", "-qm", "tracked lockfile fixture")
+        candidate = git(repository, "rev-parse", "HEAD").decode().strip()
+        generation = self.root / "publications" / candidate
+        shutil.copytree(repository, generation)
+        for root in (repository, generation):
+            (root / ".git/index.lock").write_bytes(b"transient Git index lock\n")
+            (root / ".git/refs/heads/pending.lock").write_bytes(b"transient Git ref lock\n")
+            self.assertEqual(git(root, "status", "--porcelain=v1"), b"")
+        (self.root / "evidence/output.lock").write_bytes(b"immutable evidence bytes\n")
+        before = self.source_inventory()
+        with signer_view(self.root, self.profile) as view:
+            for root in (view / "canonical", view / "publications" / candidate):
+                for relative, expected in tracked.items():
+                    self.assertEqual((root / relative).read_bytes(), expected)
+                self.assertEqual(git(root, "status", "--porcelain=v1"), b"")
+                self.assertEqual(git(root, "rev-parse", "HEAD").decode().strip(), candidate)
+                self.assertFalse((root / ".git/index.lock").exists())
+                self.assertFalse((root / ".git/refs/heads/pending.lock").exists())
+            self.assertEqual((view / "evidence/output.lock").read_bytes(), b"immutable evidence bytes\n")
+            for excluded in ("state/.workflow.lock", "state/graph.sqlite.owner.lock",
+                             ".broker-receipts/.lock", ".broker-receipts/.private"):
+                self.assertFalse((view / excluded).exists())
+        self.assertEqual(self.source_inventory(), before)
 
     def test_symlink_hardlink_and_fifo_inputs_reject(self):
         entry = self.root / "evidence/unsafe"
@@ -153,11 +212,15 @@ class SignerViewTests(unittest.TestCase):
                     self.fail("changed source admitted")
 
     def test_configured_private_key_inside_selected_inputs_rejects(self):
-        self.profile.paths["signer_private_key"] = str(self.root / "canonical/secret")
-        (self.root / "canonical/secret").write_bytes(b"private fixture")
-        with self.assertRaises(SignerViewError):
-            with signer_view(self.root, self.profile):
-                self.fail("configured private path copied")
+        for relative in ("secret", "Cargo.lock", ".private/key"):
+            secret = self.root / "canonical" / relative
+            secret.parent.mkdir(parents=True, exist_ok=True)
+            secret.write_bytes(b"private fixture")
+            self.profile.paths["signer_private_key"] = str(secret)
+            with self.subTest(relative=relative), self.assertRaises(SignerViewError):
+                with signer_view(self.root, self.profile):
+                    self.fail("configured private path copied")
+            secret.unlink()
 
     def test_copy_limits_and_nonroot_fail_closed(self):
         with patch("control_plane._signer_view.MAX_FILE_BYTES", 10):

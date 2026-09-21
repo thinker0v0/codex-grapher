@@ -273,7 +273,13 @@ def run_role_process(profile, role_name, argv, *, stdin=b"", cwd="/tmp", mounts=
             os.close(input_w); os.close(out_r); os.close(err_r); os.close(obs_r)
             os.setsid()
             _syscall("prctl", 1, signal.SIGKILL, 0, 0, 0)
-            mount_plan = _sandbox(sandbox, profile, role_name, mounts, str(cwd), network)
+            # Only this forked bootstrap normalizes scaffold creation. Restore
+            # the inherited mask before the role runs or creates private output.
+            inherited_mask = os.umask(0o022)
+            try:
+                mount_plan = _sandbox(sandbox, profile, role_name, mounts, str(cwd), network)
+            finally:
+                os.umask(inherited_mask)
             outer_pidfd = os.pidfd_open(os.getpid())
             inner = os.fork()  # the child is PID 1 of the fresh namespace
             if inner:
@@ -720,7 +726,11 @@ def bootstrap_operation(profile, workspace, operation, *, stop_after=None, barri
             os.chmod(graph_sandbox, 0o755)
             graph_mounts = [(workspace, workspace, True),
                             (Path(profile.paths["signer_public_key"]), Path(profile.paths["signer_public_key"]), False)]
-            _sandbox(graph_sandbox, profile, "graph", graph_mounts, str(workspace), False)
+            inherited_mask = os.umask(0o022)
+            try:
+                _sandbox(graph_sandbox, profile, "graph", graph_mounts, str(workspace), False)
+            finally:
+                os.umask(inherited_mask)
             outer_pidfd = os.pidfd_open(os.getpid())
             inner = os.fork()
             if inner:

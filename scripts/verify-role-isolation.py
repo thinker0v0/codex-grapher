@@ -265,6 +265,7 @@ def verify(profile, taskroot):
     taskroot.chmod(0o755)
     public = taskroot / "root-owned"
     public.mkdir(mode=0o755)
+    public.chmod(0o755)  # Fixture visibility must not depend on the caller's umask.
     inventory = {}
     for name in ("trusted-code", "policy", "checks", "graph.db", "accepted"):
         path = public / name
@@ -273,6 +274,7 @@ def verify(profile, taskroot):
         inventory[name] = sha(path.read_bytes())
     receipts = taskroot / "root-held-receipts"
     receipts.mkdir(mode=0o755)
+    receipts.chmod(0o755)
     (receipts / "receipt").write_text("inert sealed receipt fixture")
     (receipts / "receipt").chmod(0o444)
     receipt_hash = sha((receipts / "receipt").read_bytes())

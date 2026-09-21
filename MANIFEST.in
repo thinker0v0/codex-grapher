@@ -278,3 +278,4 @@ include control_plane/_boundary_attestation.py
 include control_plane/_provider_admission.py
 include tests/test_boundary_attestation.py
 include tests/test_provider_admission.py
+include tests/test_guest_setup.py

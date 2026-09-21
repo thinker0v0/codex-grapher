@@ -42,8 +42,10 @@ class PublicationRolePermissionsTests(unittest.TestCase):
         self.publications.chmod(0o2750)
         self.key = fixture.root / "public.pem"
         self.key.write_text("fixture public verification input\n")
+        self.key.chmod(0o444)
         self.rubric = fixture.root / "rubric.md"
         self.rubric.write_text("fixture frozen rubric\n")
+        self.rubric.chmod(0o444)
 
     def as_role(self, uid, gid, operation):
         reader, writer = os.pipe()
