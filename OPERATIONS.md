@@ -1,5 +1,12 @@
 # Open-Source Project Operations
 
+> Current cycle: [2026-09-21 public developer reliability](docs/cycles/20260921-reliability/HANDOFF.md).
+> The user authorized research and local implementation, and selected developer
+> installation/execution/verification/recovery as the target. This supersedes the
+> historical NQ stop for this work. Legacy release gates remain unchanged; no
+> production deployment, external messages or publication are automated tests.
+
+
 Status: local-fixture implementation candidate; release `NOT_PASS`
 
 ## Active surface, routes, and cycle authorization

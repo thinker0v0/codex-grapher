@@ -1,0 +1,308 @@
+{
+  "project_id": "opensource",
+  "task_id": "upstream-research-20260921",
+  "record_id": "UPSTREAM-SOURCES-20260921",
+  "retrieval_date": "2026-09-21T11:42:36.067023+00:00",
+  "review_due": "2026-09-28",
+  "status": "verified source metadata; no dependency adopted",
+  "records": [
+    {
+      "repository": "langchain-ai/langgraph",
+      "accessed_at": "2026-09-21T11:42:36.067023+00:00",
+      "source_authority": "official GitHub repository",
+      "errors": [],
+      "repository_url": "https://github.com/langchain-ai/langgraph",
+      "default_branch": "main",
+      "license_spdx": "MIT",
+      "api_response_sha256": "4cdd92e987e31788ecfded05baf5976274a4e2079d5892545c1a0285cf7e8232",
+      "http_date": "Mon, 21 Sep 2026 11:42:36 GMT",
+      "archived": false,
+      "head": {
+        "sha": "ed384f3a124660db6dccd6c53eaad48e1457e0b5",
+        "date": "2026-09-20T19:50:31Z",
+        "url": "https://github.com/langchain-ai/langgraph/commit/ed384f3a124660db6dccd6c53eaad48e1457e0b5"
+      },
+      "pinned_license": {
+        "url": "https://raw.githubusercontent.com/langchain-ai/langgraph/644815f9e5bc52ad8f7a5227a456227e9c3e639b/LICENSE",
+        "commit": "644815f9e5bc52ad8f7a5227a456227e9c3e639b",
+        "sha256": "d9bb52f2e3540d60ff50d8f0f5b6ba649b7fd346948c4c3d086c8afb120763c7",
+        "byte_length": 1072,
+        "text": "MIT License\n\nCopyright (c) 2024 LangChain, Inc.\n\nPermission is hereby granted, free of charge, to any person obtaining a copy\nof this software and associated documentation files (the \"Software\"), to deal\nin the Software without restriction, including without limitation the rights\nto use, copy, modify, merge, publish, distribute, sublicense, and/or sell\ncopies of the Software, and to permit persons to whom the Software is\nfurnished to do so, subject to the following conditions:\n\nThe above copyright notice and this permission notice shall be included in all\ncopies or substantial portions of the Software.\n\nTHE SOFTWARE IS PROVIDED \"AS IS\", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR\nIMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,\nFITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE\nAUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER\nLIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,\nOUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE\nSOFTWARE.\n"
+      },
+      "github_latest_release": {
+        "tag": "sdk==0.4.4",
+        "published_at": "2026-08-27T21:25:36Z",
+        "url": "https://github.com/langchain-ai/langgraph/releases/tag/sdk%3D%3D0.4.4",
+        "sha": "d5f4b2aa960940effc8430165ab3604038e817af",
+        "commit_date": "2026-08-27T21:14:54Z"
+      },
+      "latest_stable_core_release": {
+        "tag": "1.2.11",
+        "published_at": "2026-08-11T14:00:50Z",
+        "url": "https://github.com/langchain-ai/langgraph/releases/tag/1.2.11",
+        "sha": "644815f9e5bc52ad8f7a5227a456227e9c3e639b",
+        "commit_date": "2026-08-11T13:55:59Z"
+      }
+    },
+    {
+      "repository": "dbos-inc/dbos-transact-py",
+      "accessed_at": "2026-09-21T11:42:36.067023+00:00",
+      "source_authority": "official GitHub repository",
+      "errors": [],
+      "repository_url": "https://github.com/dbos-inc/dbos-transact-py",
+      "default_branch": "main",
+      "license_spdx": "MIT",
+      "api_response_sha256": "98bec9a1c15764da3883a01a95f170742e4c97e08a1d5fa47dd93520abdf2021",
+      "http_date": "Mon, 21 Sep 2026 11:42:36 GMT",
+      "archived": false,
+      "head": {
+        "sha": "a041d4d5d1e69a3b5ce1b044c6ec2033850e7c59",
+        "date": "2026-09-17T22:31:08Z",
+        "url": "https://github.com/dbos-inc/dbos-transact-py/commit/a041d4d5d1e69a3b5ce1b044c6ec2033850e7c59"
+      },
+      "latest_stable_release": {
+        "tag": "3.0.0",
+        "published_at": "2026-09-16T17:16:51Z",
+        "url": "https://github.com/dbos-inc/dbos-transact-py/releases/tag/3.0.0",
+        "sha": "dd8a5f315a54c02a750f80dd15127958243ed339",
+        "commit_date": "2026-09-15T15:36:03Z"
+      },
+      "pinned_license": {
+        "url": "https://raw.githubusercontent.com/dbos-inc/dbos-transact-py/dd8a5f315a54c02a750f80dd15127958243ed339/LICENSE",
+        "commit": "dd8a5f315a54c02a750f80dd15127958243ed339",
+        "sha256": "546662b7f6b9fa4770f564fa7d8e63c40595c0643380b1723d6adc55552154d5",
+        "byte_length": 1067,
+        "text": "MIT License\n\nCopyright (c) 2024 DBOS, Inc.\n\nPermission is hereby granted, free of charge, to any person obtaining a copy\nof this software and associated documentation files (the \"Software\"), to deal\nin the Software without restriction, including without limitation the rights\nto use, copy, modify, merge, publish, distribute, sublicense, and/or sell\ncopies of the Software, and to permit persons to whom the Software is\nfurnished to do so, subject to the following conditions:\n\nThe above copyright notice and this permission notice shall be included in all\ncopies or substantial portions of the Software.\n\nTHE SOFTWARE IS PROVIDED \"AS IS\", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR\nIMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,\nFITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE\nAUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER\nLIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,\nOUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE\nSOFTWARE.\n"
+      }
+    },
+    {
+      "repository": "temporalio/sdk-python",
+      "accessed_at": "2026-09-21T11:42:36.067023+00:00",
+      "source_authority": "official GitHub repository",
+      "errors": [],
+      "repository_url": "https://github.com/temporalio/sdk-python",
+      "default_branch": "main",
+      "license_spdx": "MIT",
+      "api_response_sha256": "d2f28e09efed2f29a0cf5d49b472795ad05f374aae1c727437c8e52f465caf2a",
+      "http_date": "Mon, 21 Sep 2026 11:42:36 GMT",
+      "archived": false,
+      "head": {
+        "sha": "eb642b14947bd8bcdf8816cffb6a63869803f5c6",
+        "date": "2026-09-20T04:16:43Z",
+        "url": "https://github.com/temporalio/sdk-python/commit/eb642b14947bd8bcdf8816cffb6a63869803f5c6"
+      },
+      "latest_stable_release": {
+        "tag": "1.33.0",
+        "published_at": "2026-09-15T00:57:27Z",
+        "url": "https://github.com/temporalio/sdk-python/releases/tag/1.33.0",
+        "sha": "ab52fdde33ee8ed193402625bfdba25d240a762d",
+        "commit_date": "2026-09-15T00:31:46Z"
+      },
+      "pinned_license": {
+        "url": "https://raw.githubusercontent.com/temporalio/sdk-python/ab52fdde33ee8ed193402625bfdba25d240a762d/LICENSE",
+        "commit": "ab52fdde33ee8ed193402625bfdba25d240a762d",
+        "sha256": "d7706f28d144dabf07e4946553a4d117d1dab5cda6bf34a602959b4a2fa86b38",
+        "byte_length": 1108,
+        "text": "The MIT License\n\nCopyright (c) 2022 Temporal Technologies Inc.  All rights reserved.\n\nPermission is hereby granted, free of charge, to any person obtaining a copy\nof this software and associated documentation files (the \"Software\"), to deal\nin the Software without restriction, including without limitation the rights\nto use, copy, modify, merge, publish, distribute, sublicense, and/or sell\ncopies of the Software, and to permit persons to whom the Software is\nfurnished to do so, subject to the following conditions:\n\nThe above copyright notice and this permission notice shall be included in\nall copies or substantial portions of the Software.\n\nTHE SOFTWARE IS PROVIDED \"AS IS\", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR\nIMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,\nFITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE\nAUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER\nLIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,\nOUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN\nTHE SOFTWARE."
+      }
+    },
+    {
+      "repository": "OpenHands/software-agent-sdk",
+      "accessed_at": "2026-09-21T11:42:36.067023+00:00",
+      "source_authority": "official GitHub repository",
+      "errors": [],
+      "repository_url": "https://github.com/OpenHands/software-agent-sdk",
+      "default_branch": "main",
+      "license_spdx": "MIT",
+      "api_response_sha256": "8cb5d78bc58693dfb3dc1b22f2544a5f42b7e05c892521ca3f9f501faf7bb923",
+      "http_date": "Mon, 21 Sep 2026 11:42:36 GMT",
+      "archived": false,
+      "head": {
+        "sha": "856d99d48e4b11c70c5f1cab21e7830570dbc324",
+        "date": "2026-09-20T19:00:59Z",
+        "url": "https://github.com/OpenHands/software-agent-sdk/commit/856d99d48e4b11c70c5f1cab21e7830570dbc324"
+      },
+      "latest_stable_release": {
+        "tag": "v1.49.2",
+        "published_at": "2026-09-17T20:46:52Z",
+        "url": "https://github.com/OpenHands/software-agent-sdk/releases/tag/v1.49.2",
+        "sha": "d128a786ee2ee570eb23ff5862ec148b43cfad0b",
+        "commit_date": "2026-09-17T20:45:50Z"
+      },
+      "pinned_license": {
+        "url": "https://raw.githubusercontent.com/OpenHands/software-agent-sdk/d128a786ee2ee570eb23ff5862ec148b43cfad0b/LICENSE",
+        "commit": "d128a786ee2ee570eb23ff5862ec148b43cfad0b",
+        "sha256": "14a9b631c658eee682c6c2973525fbdf808c3457176bc47513052c559cc5ce86",
+        "byte_length": 1079,
+        "text": "MIT License\n\nCopyright (c) 2026 OpenHands contributors\n\nPermission is hereby granted, free of charge, to any person obtaining a copy\nof this software and associated documentation files (the \"Software\"), to deal\nin the Software without restriction, including without limitation the rights\nto use, copy, modify, merge, publish, distribute, sublicense, and/or sell\ncopies of the Software, and to permit persons to whom the Software is\nfurnished to do so, subject to the following conditions:\n\nThe above copyright notice and this permission notice shall be included in all\ncopies or substantial portions of the Software.\n\nTHE SOFTWARE IS PROVIDED \"AS IS\", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR\nIMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,\nFITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE\nAUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER\nLIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,\nOUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE\nSOFTWARE.\n"
+      }
+    },
+    {
+      "repository": "SWE-agent/SWE-agent",
+      "accessed_at": "2026-09-21T11:42:36.067023+00:00",
+      "source_authority": "official GitHub repository",
+      "errors": [],
+      "repository_url": "https://github.com/SWE-agent/SWE-agent",
+      "default_branch": "main",
+      "license_spdx": "MIT",
+      "api_response_sha256": "1188e032a62032cd231277c1195e2dc45f2365f4c3c18c6901d48df77798c3b9",
+      "http_date": "Mon, 21 Sep 2026 11:42:36 GMT",
+      "archived": false,
+      "head": {
+        "sha": "3ea751c087f32b16e039a2233dd6eefecef325d5",
+        "date": "2026-07-16T15:21:18Z",
+        "url": "https://github.com/SWE-agent/SWE-agent/commit/3ea751c087f32b16e039a2233dd6eefecef325d5"
+      },
+      "latest_stable_release": {
+        "tag": "v1.1.0",
+        "published_at": "2025-05-22T16:11:39Z",
+        "url": "https://github.com/SWE-agent/SWE-agent/releases/tag/v1.1.0",
+        "sha": "0f3acafacabc0def8cc76b4e48acb4b6cf302cb9",
+        "commit_date": "2025-05-22T16:10:41Z"
+      },
+      "pinned_license": {
+        "url": "https://raw.githubusercontent.com/SWE-agent/SWE-agent/0f3acafacabc0def8cc76b4e48acb4b6cf302cb9/LICENSE",
+        "commit": "0f3acafacabc0def8cc76b4e48acb4b6cf302cb9",
+        "sha256": "7610ed3916f6674e34b78417894abd57ff538b3cfdda3085e3643d82acbaf31f",
+        "byte_length": 1147,
+        "text": "MIT License\n\nCopyright (c) 2024 John Yang, Carlos E. Jimenez, Alexander Wettig, Shunyu Yao, Karthik Narasimhan, Ofir Press\n\nPermission is hereby granted, free of charge, to any person obtaining a copy\nof this software and associated documentation files (the \"Software\"), to deal\nin the Software without restriction, including without limitation the rights\nto use, copy, modify, merge, publish, distribute, sublicense, and/or sell\ncopies of the Software, and to permit persons to whom the Software is\nfurnished to do so, subject to the following conditions:\n\nThe above copyright notice and this permission notice shall be included in all\ncopies or substantial portions of the Software.\n\nTHE SOFTWARE IS PROVIDED \"AS IS\", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR\nIMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,\nFITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE\nAUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER\nLIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,\nOUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE\nSOFTWARE.\n"
+      }
+    },
+    {
+      "repository": "SWE-agent/mini-swe-agent",
+      "accessed_at": "2026-09-21T11:44:23.884188+00:00",
+      "source_authority": "official GitHub repository",
+      "repository_url": "https://github.com/SWE-agent/mini-swe-agent",
+      "default_branch": "main",
+      "license_spdx": "MIT",
+      "archived": false,
+      "head": {
+        "sha": "04d809ceab9df28f9adaed044884180159172930",
+        "date": "2026-09-03T05:05:59Z",
+        "url": "https://github.com/SWE-agent/mini-swe-agent/commit/04d809ceab9df28f9adaed044884180159172930"
+      },
+      "latest_stable_release": {
+        "tag": "v2.4.6",
+        "published_at": "2026-07-23T03:12:33Z",
+        "url": "https://github.com/SWE-agent/mini-swe-agent/releases/tag/v2.4.6",
+        "sha": "a83fcae82d2a08f0ee0c688f9d137b3566c097f8",
+        "commit_date": "2026-07-23T03:11:33Z"
+      },
+      "errors": [],
+      "pinned_license": {
+        "url": "https://raw.githubusercontent.com/SWE-agent/mini-swe-agent/a83fcae82d2a08f0ee0c688f9d137b3566c097f8/LICENSE.md",
+        "commit": "a83fcae82d2a08f0ee0c688f9d137b3566c097f8",
+        "sha256": "0f796e58f91d1c07bb2c1b1d0f8bf3a83017c3a5dec1bdc6fae733b2cd2e875b",
+        "byte_length": 1094,
+        "text": "MIT License\n\nCopyright (c) 2025 Kilian A. Lieret and Carlos E. Jimenez\n\nPermission is hereby granted, free of charge, to any person obtaining a copy\nof this software and associated documentation files (the \"Software\"), to deal\nin the Software without restriction, including without limitation the rights\nto use, copy, modify, merge, publish, distribute, sublicense, and/or sell\ncopies of the Software, and to permit persons to whom the Software is\nfurnished to do so, subject to the following conditions:\n\nThe above copyright notice and this permission notice shall be included in all\ncopies or substantial portions of the Software.\n\nTHE SOFTWARE IS PROVIDED \"AS IS\", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR\nIMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,\nFITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE\nAUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER\nLIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,\nOUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE\nSOFTWARE."
+      }
+    }
+  ],
+  "pinned_source_files": [
+    {
+      "repository": "langchain-ai/langgraph",
+      "path": "libs/langgraph/langgraph/types.py",
+      "commit": "644815f9e5bc52ad8f7a5227a456227e9c3e639b",
+      "url": "https://raw.githubusercontent.com/langchain-ai/langgraph/644815f9e5bc52ad8f7a5227a456227e9c3e639b/libs/langgraph/langgraph/types.py",
+      "sha256": "7204b467ed7e724ec16bbd2e3e7fac1c698742b12dda27cf2086f744128b1844",
+      "byte_length": 34950,
+      "status": "retrieved",
+      "accessed_at": "2026-09-21T11:45:00.840780+00:00"
+    },
+    {
+      "repository": "langchain-ai/langgraph",
+      "path": "libs/langgraph/langgraph/pregel/_retry.py",
+      "commit": "644815f9e5bc52ad8f7a5227a456227e9c3e639b",
+      "url": "https://raw.githubusercontent.com/langchain-ai/langgraph/644815f9e5bc52ad8f7a5227a456227e9c3e639b/libs/langgraph/langgraph/pregel/_retry.py",
+      "sha256": "667a74090e23fda724e74ad377586e32325510cdd9042d320d60306f783f0a9d",
+      "byte_length": 33048,
+      "status": "retrieved",
+      "accessed_at": "2026-09-21T11:45:01.072072+00:00"
+    },
+    {
+      "repository": "dbos-inc/dbos-transact-py",
+      "path": "dbos/_dbos.py",
+      "commit": "dd8a5f315a54c02a750f80dd15127958243ed339",
+      "url": "https://raw.githubusercontent.com/dbos-inc/dbos-transact-py/dd8a5f315a54c02a750f80dd15127958243ed339/dbos/_dbos.py",
+      "sha256": "425b1573051f3896f11266a02e819c80be7558a6f482f0d411a0dfd989f869bc",
+      "byte_length": 149495,
+      "status": "retrieved",
+      "accessed_at": "2026-09-21T11:45:00.691092+00:00"
+    },
+    {
+      "repository": "temporalio/sdk-python",
+      "path": "temporalio/worker/_replayer.py",
+      "commit": "ab52fdde33ee8ed193402625bfdba25d240a762d",
+      "url": "https://raw.githubusercontent.com/temporalio/sdk-python/ab52fdde33ee8ed193402625bfdba25d240a762d/temporalio/worker/_replayer.py",
+      "sha256": "abc6ceac05a402d7e3f650fbcc49ba17be632dd656caa5de1857a5a08cf9f074",
+      "byte_length": 19715,
+      "status": "retrieved",
+      "accessed_at": "2026-09-21T11:45:00.833906+00:00"
+    },
+    {
+      "repository": "OpenHands/software-agent-sdk",
+      "path": "README.md",
+      "commit": "d128a786ee2ee570eb23ff5862ec148b43cfad0b",
+      "url": "https://raw.githubusercontent.com/OpenHands/software-agent-sdk/d128a786ee2ee570eb23ff5862ec148b43cfad0b/README.md",
+      "sha256": "95094c9745c7cc58136d4eaa1688fb6038aafefec2be05344293f6df7e55dbf8",
+      "byte_length": 10835,
+      "status": "retrieved",
+      "accessed_at": "2026-09-21T11:45:00.684342+00:00"
+    },
+    {
+      "repository": "SWE-agent/SWE-agent",
+      "path": "README.md",
+      "commit": "0f3acafacabc0def8cc76b4e48acb4b6cf302cb9",
+      "url": "https://raw.githubusercontent.com/SWE-agent/SWE-agent/0f3acafacabc0def8cc76b4e48acb4b6cf302cb9/README.md",
+      "sha256": "6ae9e2a5d9f62af18a1be909df6bfe90f4e7f88005b51d64abf123b244ffeb26",
+      "byte_length": 6968,
+      "status": "retrieved",
+      "accessed_at": "2026-09-21T11:45:00.653129+00:00"
+    },
+    {
+      "repository": "SWE-agent/mini-swe-agent",
+      "path": "src/minisweagent/agents/default.py",
+      "commit": "a83fcae82d2a08f0ee0c688f9d137b3566c097f8",
+      "url": "https://raw.githubusercontent.com/SWE-agent/mini-swe-agent/a83fcae82d2a08f0ee0c688f9d137b3566c097f8/src/minisweagent/agents/default.py",
+      "sha256": "e8ef8aa365942d739c2ec5cb0879f60f377d2dc2de8ec670aaedf3bafb45a4c2",
+      "byte_length": 8043,
+      "status": "retrieved",
+      "accessed_at": "2026-09-21T11:45:00.988298+00:00"
+    },
+    {
+      "repository": "SWE-agent/mini-swe-agent",
+      "path": "src/minisweagent/environments/local.py",
+      "commit": "a83fcae82d2a08f0ee0c688f9d137b3566c097f8",
+      "url": "https://raw.githubusercontent.com/SWE-agent/mini-swe-agent/a83fcae82d2a08f0ee0c688f9d137b3566c097f8/src/minisweagent/environments/local.py",
+      "sha256": "01dd33ae6be897458611911cc0eee1389092ea9fc6788c7eb24773e7c6342b1c",
+      "byte_length": 3617,
+      "status": "retrieved",
+      "accessed_at": "2026-09-21T11:45:00.973011+00:00"
+    }
+  ],
+  "local_observation": {
+    "git_sha": "a442e971d0ed2f84265cf6e7fe68f7ed02f71ef1",
+    "paths": [
+      {
+        "path": "README.md",
+        "sha256": "e0c96788a1afdc2f2aaaa56527d39b814aff42801658aa0ff68316f91898e5e8"
+      },
+      {
+        "path": "control_plane/project_graph.py",
+        "sha256": "322e42fd344cbb6c1422559bb7d4634f59dd702479b0c3447783d8a7e7380e70"
+      },
+      {
+        "path": "control_plane/graph_service.py",
+        "sha256": "0fc8a4414deae4b00e7b8d390f272d9d944b1e94a74588fd54857a55ce0de6c9"
+      },
+      {
+        "path": "control_plane/graph_client.py",
+        "sha256": "584fb503bb5f589eb9e3720cfcaa10e6f387a33625c5543894b08bb6ee750f0c"
+      },
+      {
+        "path": "control_plane/artifact_builder.py",
+        "sha256": "c75e8dc5d41aae7e0470e6a529f2b002b6f7547e753206a4fe1ebdb1f1897301"
+      }
+    ]
+  }
+}
