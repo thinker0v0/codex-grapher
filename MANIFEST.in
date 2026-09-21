@@ -202,6 +202,8 @@ include docs/cycles/20260921-portable-workers/sqlite-provenance.json
 
 include docs/cycles/20260921-portable-workers/vm-feasibility.json
 
+include docs/cycles/20260921-portable-workers/DESIGN_AMENDMENT_V2.md
+
 # Defense in depth: never distribute local runtime state or private key files.
 prune .git
 prune .venv

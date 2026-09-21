@@ -64,10 +64,13 @@
     "max_concurrent_guests": 1,
     "max_boot_seconds": 180,
     "max_pilot_seconds": 900,
-    "pilot_elapsed_seconds": 753.067,
     "configured_guest_memory_is_not_total_emulator_rss": true,
     "observed_emulator_rss_bytes": 2062581760,
-    "remaining_host_available_memory_bytes_during_peak_observation": 3690987520
+    "remaining_host_available_memory_bytes_during_peak_observation": 3690987520,
+    "final_boot_attempt_elapsed_seconds": 341.581,
+    "all_attempts_window_started_utc": "2026-09-21T14:08:13.653030+00:00",
+    "all_attempts_window_finished_utc": "2026-09-21T14:20:46.719809+00:00",
+    "all_attempts_window_elapsed_seconds": 753.067
   },
   "cleanup": {
     "qemu_process_stopped": true,
@@ -94,7 +97,8 @@
   "private_evidence_sha256": {
     "pilot_result": "1f6a14a702380f7811ee451fdabcb4123894e401441272a7d944b1ffeaafefb1",
     "serial_log": "65aad92319cfcfc9f7285db07ff86e1657be2852eaedf5c1565f89e3c8c34470",
-    "qemu_security_observation": "4b40eb63b40c593ba53c884e480de392140edb3300605222722e7fa0c09e4eb0"
+    "qemu_security_observation": "4b40eb63b40c593ba53c884e480de392140edb3300605222722e7fa0c09e4eb0",
+    "first_attempt": "a50847fbdda985feccaad9ac434c1aa830c7da982e74c05fae985d80c47b8378"
   },
   "tool_package_sources": [
     {

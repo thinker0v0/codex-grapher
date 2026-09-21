@@ -3,6 +3,8 @@
 Status: candidate for independent design review; acceptance contract frozen at commit.
 Record: `opensource.portable-workers.scaffold.v1`; owner: cycle integrator.
 Date: 2026-09-21 UTC; public; review on interface/ownership change; hash at freeze.
+Normative authority/interface correction: [Design amendment v2](DESIGN_AMENDMENT_V2.md).
+No builder starts until its independent design reevaluation passes.
 
 ## Bounded work units
 
@@ -46,6 +48,8 @@ execution remains compatible. No other builder edits that file concurrently.
 - I owns profile validation, real role launch, restricted candidate-test broker
   and receipt sealing. The signer verifies the broker-owned receipt and active
   graph claim; it never imports or executes candidate-controlled modules.
+  I also owns the explicit privileged bootstrap, narrow AF_UNIX launcher and
+  root-held `.broker-receipts`; R wires its root-only installed entrypoint.
 - B consumes an explicit quiescent owner lease, exact profile and closure APIs;
   it cannot fake quiescence from files or silently reconcile under another owner.
 - S owns the shared writable-connection policy/attestation and read-only runtime
@@ -63,6 +67,15 @@ Interface values include exact bytes/hashes and explicit error classes:
 These are public result classifications, not new graph-state enum members.
 
 ## OS authority and resources
+
+The table describes four dropped child roles. Amendment v2 adds the explicit
+root bootstrap trust domain that constructs namespaces/launches roles, validates
+root-owned frozen inputs and seals receipts; it never executes candidate code.
+Graph has no general launch privilege and connects to the helper after UID drop.
+Private key stays outside workspace; only signer sees its read-only mount.
+Workspace top/root receipt directory cannot be renamed/replaced by graph. Public
+receipt bytes are read-only to graph/signer, invisible to worker/test and included
+by B in backup closure. Runtime sockets and private keys remain excluded.
 
 | Resource | Worker | Candidate tests | Signer | Graph/integrator |
 | --- | --- | --- | --- | --- |

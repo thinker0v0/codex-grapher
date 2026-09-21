@@ -4,6 +4,9 @@ Status: candidate for independent design review; acceptance contract frozen at c
 Record: `opensource.portable-workers.solution.v1`; owner: cycle integrator.
 Date: 2026-09-21 UTC; review at freeze or changed interface. Public; hash at freeze.
 Decisions: [DECISIONS.md](DECISIONS.md). Evidence: [RESEARCH.md](RESEARCH.md).
+Normative interface correction: [Design amendment v2](DESIGN_AMENDMENT_V2.md)
+defines explicit privileged bootstrap, restricted launcher and exact sealed
+test/evaluation/signing requests; it supersedes conflicting v1 descriptions.
 
 ## Lifecycle and source preservation
 
@@ -78,7 +81,8 @@ symlink-safe; private paths remain trusted configuration, never public telemetry
 ExecutionProfile = {
   schema_version: 1,
   mode: "trusted-local" | "isolated-linux",
-  tools: {python: Tool, git: Tool, provider: Tool},
+  tools: {python: Tool, git: Tool, provider: Tool, openssl: Tool,
+          bwrap: Tool|null, setpriv: Tool|null},
   provider: {backend: "codex", model: string,
              reasoning_effort: string, service_tier: string},
   roles: {worker: Role, test_runner: Role, signer: Role, graph: Role},
@@ -91,8 +95,13 @@ ExecutionProfile = {
 
 Resolve auth home/UID/GID through the actual account database; account must equal
 the configured worker role. Never accept a home override or arbitrary environment
-map. In isolated mode all four real UIDs are distinct and required tool/code/key
-permissions are checked. `wal-full` requires a valid exact loaded-runtime
+map. In isolated mode all four real UIDs are distinct and greater than zero in
+the SO_PEERCRED credential domain, with no host-root mapping; required tool/code/key
+permissions are checked. Bootstrap is an explicit fifth root authority; graph
+is dropped before connecting to its SO_PEERCRED-authenticated launcher. `bwrap`
+and `setpriv` may be null only in trusted-local. Keys live outside the workspace;
+root owns protected receipt storage. Exact rules are in amendment v2.
+`wal-full` requires a valid exact loaded-runtime
 attestation; `delete-extra` does not claim a patch. Missing private key is allowed
 only for explicit read-only/verify-only operation, never execution or signing.
 
@@ -148,6 +157,9 @@ results in trusted storage keyed by run/request hash; neither test nor worker
 can supply/replace a sealed receipt. The artifact adapter translates verified
 required-test results to the existing manifest fields; signer consumes only
 broker-verified receipt identity/content, never a candidate-writable report.
+These are trusted internal requests derived from frozen startup inputs, not raw
+launcher arguments. Amendment v2 fixes the receipt wire, broker authority and
+restricted evaluation/signing flow; graph cannot construct a trusted receipt.
 
 Limits are enforced and audited: worker invocations default 1, explicit maximum
 3; worker timeout default 900 seconds, maximum 3600; evaluation/test suite timeout

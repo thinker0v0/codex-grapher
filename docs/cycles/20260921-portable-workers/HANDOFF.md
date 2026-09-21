@@ -8,6 +8,9 @@ Baseline: `df9e0c31ffdb7e045a268b6b03b16ce33b623a49`.
 This handoff records user-fixed scope and root-set decisions. SOLUTION/SCAFFOLDING
 become implementation instructions after independent design review and the root
 freeze commit. This status is not DESIGN_READY or an implementation/release pass.
+Read [Design amendment v2](DESIGN_AMENDMENT_V2.md) with SOLUTION before building.
+It repairs the independent review's launcher and sealed-signing gaps, retains
+the rubric unchanged and requires independent design reevaluation.
 
 ## Approved scope and decisions
 
@@ -38,6 +41,12 @@ This includes required tests inside `artifact_builder.build`, before independent
 evaluation. G owns the narrow injected runner hook; I owns execution/receipt
 sealing. Generic isolated mode must refuse a missing runner, never fall back to
 the graph/controller identity.
+Isolated mode starts through an explicit root CLI bootstrap using only root-owned
+read-only installed code/config. It launches four distinct dropped role UIDs;
+graph connects after dropping UID to the narrow authenticated launcher. There is
+no implicit host account/service installation or trusted-local fallback. I owns
+the helper/root-sealed receipt store and exact amendment-v2 wire/signing schemas.
+Private signer key is operator-provisioned outside workspace; graph never reads it.
 
 Actual Codex smoke uses existing non-root UID 1000 with explicit model
 `gpt-5.6-sol`, reasoning `medium`, service tier `default`, and
