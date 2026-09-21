@@ -3,10 +3,14 @@ import json
 import os
 from pathlib import Path
 import pwd
+import shutil
 import subprocess
+import sys
 import tempfile
+import textwrap
 import unittest
 from unittest.mock import patch
+import venv
 
 from control_plane.execution_profile import ExecutionProfileError, load_execution_profile
 from control_plane.profile_setup import create_execution_profile
@@ -155,6 +159,90 @@ class ProfileSetupTests(unittest.TestCase):
         with self.assertRaises(ExecutionProfileError):
             self.create(mode="isolated-linux", roles=roles)
         self.assert_no_output()
+
+    @unittest.skipUnless(os.geteuid() == 0, "requires dropping credentials for a disposable copied venv")
+    def test_trusted_local_venv_create_and_load_as_actual_nonroot_user(self):
+        try:
+            account = pwd.getpwuid(1000)
+        except KeyError:
+            self.skipTest("requires an existing UID 1000 account; never creates host accounts")
+        self.root.chmod(0o755)
+        fixture = self.root / "user-owned"
+        fixture.mkdir()
+        prefix = fixture / "venv"
+        venv.EnvBuilder(with_pip=False, symlinks=False).create(prefix)
+        minor = f"{sys.version_info.major}.{sys.version_info.minor}"
+        code = prefix / "lib" / f"python{minor}" / "site-packages"
+        package = code / "control_plane"
+        package.mkdir()
+        source = Path(__file__).resolve().parents[1] / "control_plane"
+        for name in ("__init__.py", "execution_profile.py", "profile_setup.py"):
+            shutil.copyfile(source / name, package / name)
+        tool = fixture / "tool"
+        marker = fixture / "unexpected-tool-execution"
+        tool.write_text(f"#!/bin/sh\ntouch '{marker}'\nexit 87\n")
+        tool.chmod(0o755)
+        (fixture / "public.pem").write_text("PUBLIC-FIXTURE\n")
+        private = fixture / "private.pem"
+        private.write_text("SECRET-KEY-FIXTURE-NEVER-PROFILE-CONTENT\n")
+        private.chmod(0o600)
+        for directory, directories, files in os.walk(fixture, followlinks=False):
+            for path in [Path(directory), *(Path(directory) / name for name in directories + files)]:
+                os.chown(path, account.pw_uid, account.pw_gid, follow_symlinks=False)
+        python = prefix / "bin" / f"python{minor}"
+        self.assertFalse(python.is_symlink())
+        cfg = prefix / "pyvenv.cfg"
+        initial_cfg = cfg.read_bytes(), cfg.stat().st_mode
+        driver = textwrap.dedent("""
+            import hashlib, json, os, pathlib, pwd, subprocess, sys
+            from unittest.mock import patch
+            from control_plane import execution_profile, profile_setup
+
+            fixture = pathlib.Path(sys.argv[1])
+            prefix = fixture / "venv"
+            code = prefix / "lib" / f"python{sys.version_info.major}.{sys.version_info.minor}" / "site-packages"
+            account = pwd.getpwuid(os.getuid())
+            tool = fixture / "tool"
+            versions = {name: "fixture 1" for name in ("git", "provider", "openssl")}
+            versions["python"] = "Python " + ".".join(str(part) for part in sys.version_info[:3])
+            output = fixture / "profile.json"
+            with patch.object(subprocess, "Popen", side_effect=AssertionError("profile tools must never execute")):
+                created = profile_setup.create_execution_profile(
+                    output, mode="trusted-local", worker_account=account.pw_name,
+                    model="explicit-model", reasoning_effort="medium", service_tier="default",
+                    python_path=pathlib.Path(sys.executable), git_path=tool,
+                    provider_path=tool, openssl_path=tool, trusted_code_root=code,
+                    signer_public_key=fixture / "public.pem", signer_private_key=fixture / "private.pem",
+                    roles={name: {"uid": os.getuid(), "gid": os.getgid()}
+                           for name in ("worker", "test_runner", "signer", "graph")},
+                    observed_versions=versions)
+                loaded = execution_profile.load_execution_profile(output, require_private_key=True)
+            print(json.dumps({
+                "uid": os.getuid(), "gid": os.getgid(), "mode": loaded.mode,
+                "prefix": sys.prefix, "module": execution_profile.__file__,
+                "cfg_uid": (prefix / "pyvenv.cfg").stat().st_uid,
+                "profile_uid": output.stat().st_uid,
+                "loaded_hash_matches": loaded.sha256 == created.sha256 == hashlib.sha256(output.read_bytes()).hexdigest(),
+                "code_hash_matches": loaded.paths["trusted_code_sha256"] == execution_profile.trusted_code_digest(code, isolated=False),
+            }))
+        """)
+        result = subprocess.run(
+            [str(python), "-I", "-B", "-c", driver, str(fixture)],
+            cwd=fixture, user=account.pw_uid, group=account.pw_gid, extra_groups=[],
+            env={"HOME": account.pw_dir, "PATH": "/usr/bin:/bin", "LANG": "C.UTF-8",
+                 "PYTHONDONTWRITEBYTECODE": "1"},
+            stdin=subprocess.DEVNULL, capture_output=True, text=True, timeout=30, check=False)
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        observed = json.loads(result.stdout)
+        self.assertEqual(observed, {
+            "uid": 1000, "gid": account.pw_gid, "mode": "trusted-local",
+            "prefix": str(prefix), "module": str(package / "execution_profile.py"),
+            "cfg_uid": 1000, "profile_uid": 1000,
+            "loaded_hash_matches": True, "code_hash_matches": True,
+        })
+        self.assertEqual((cfg.read_bytes(), cfg.stat().st_mode), initial_cfg)
+        self.assertFalse(marker.exists())
+        self.assertNotIn(b"SECRET-KEY-FIXTURE", (fixture / "profile.json").read_bytes())
 
 
 if __name__ == "__main__":

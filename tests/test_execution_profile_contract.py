@@ -442,6 +442,93 @@ class VenvMetadataTests(unittest.TestCase):
         with self.assertRaises(ExecutionProfileError):
             validate_execution_profile(self.value)
 
+    def test_trusted_local_venv_preserves_metadata_digest_bytes_and_modes(self):
+        original = self.cfg.read_bytes()
+        previous = None
+        for contents, mode in ((original, 0o644), (original + b"\n", 0o644),
+                               (original + b"\n", 0o640)):
+            self.cfg.write_bytes(contents)
+            self.cfg.chmod(mode)
+            with self.subTest(contents=len(contents), mode=mode):
+                strict = trusted_code_digest(self.venv_code)
+                self.assertEqual(strict, trusted_code_digest(self.venv_code, isolated=True))
+                self.assertEqual(strict, trusted_code_digest(self.venv_code, isolated=False))
+                self.assertEqual(venv_runtime_metadata(self.venv_python, self.venv_code), (self.cfg,))
+                self.assertEqual(venv_runtime_metadata(self.venv_python, self.venv_code, isolated=False),
+                                 (self.cfg,))
+                if previous is not None:
+                    self.assertNotEqual(strict, previous)
+                previous = strict
+
+    def test_trusted_local_venv_nonroot_metadata_and_ancestor_remain_isolated_denials(self):
+        self.value["tools"]["python"] = {
+            "path": str(self.venv_python), "sha256": executable_digest(self.venv_python),
+            "version": "Python 3.12.3"}
+        self.value["paths"]["trusted_code_root"] = str(self.venv_code)
+        self.value["paths"]["trusted_code_sha256"] = trusted_code_digest(self.venv_code)
+        isolated_value, account = ExecutionProfileContractTests.isolated(self)
+        isolated_path = self.root / "isolated-profile.json"
+        isolated_path.write_text(json.dumps(isolated_value))
+        with patch("control_plane.execution_profile.pwd.getpwnam", return_value=account):
+            # Establish this fixture is otherwise valid before testing ownership.
+            load_execution_profile(isolated_path, verify_tools=False)
+        for target in (self.cfg, self.prefix):
+            original_uid, original_gid = target.stat().st_uid, target.stat().st_gid
+            os.chown(target, 20001, 20001)
+            try:
+                with self.subTest(target=target.name):
+                    self.assertEqual(venv_runtime_metadata(self.venv_python, self.venv_code, isolated=False),
+                                     (self.cfg,))
+                    self.assertEqual(trusted_code_digest(self.venv_code, isolated=False),
+                                     self.value["paths"]["trusted_code_sha256"])
+                    validate_execution_profile(self.value, verify_tools=False)
+                    for kwargs in ({}, {"isolated": True}):
+                        with self.assertRaises(ExecutionProfileError):
+                            trusted_code_digest(self.venv_code, **kwargs)
+                        with self.assertRaises(ExecutionProfileError):
+                            venv_runtime_metadata(self.venv_python, self.venv_code, **kwargs)
+                    with patch("control_plane.execution_profile.pwd.getpwnam", return_value=account):
+                        for verify_tools in (False, True):
+                            with self.subTest(verify_tools=verify_tools), self.assertRaises(ExecutionProfileError):
+                                load_execution_profile(isolated_path, verify_tools=verify_tools)
+            finally:
+                os.chown(target, original_uid, original_gid)
+
+    def test_trusted_local_venv_frozen_hash_rejects_metadata_mutation(self):
+        os.chown(self.prefix, 20001, 20001)
+        os.chown(self.cfg, 20001, 20001)
+        self.value["tools"]["python"] = {
+            "path": str(self.venv_python), "sha256": executable_digest(self.venv_python),
+            "version": "Python 3.12.3"}
+        self.value["paths"]["trusted_code_root"] = str(self.venv_code)
+        self.value["paths"]["trusted_code_sha256"] = trusted_code_digest(self.venv_code, isolated=False)
+        path = self.root / "local-profile.json"
+        path.write_text(json.dumps(self.value))
+        load_execution_profile(path, verify_tools=False)
+        self.cfg.write_text(self.cfg.read_text().replace("--copies fixture", "--copies changed"))
+        for verify_tools in (False, True):
+            with self.subTest(verify_tools=verify_tools), self.assertRaisesRegex(ExecutionProfileError, "hash mismatch"):
+                load_execution_profile(path, verify_tools=verify_tools)
+
+    def test_trusted_local_venv_isolation_switches_require_actual_booleans(self):
+        from control_plane.execution_profile import _read_venv_config, _trusted_inventory
+
+        for invalid in ("false", "true", "trusted-local", 0, 1, None):
+            for code in (self.code, self.venv_code):
+                with self.subTest(invalid=invalid, code=code.name):
+                    with self.assertRaises(ExecutionProfileError):
+                        trusted_code_digest(code, isolated=invalid)
+                    with self.assertRaises(ExecutionProfileError):
+                        venv_runtime_metadata(self.venv_python, code, isolated=invalid)
+                    with self.assertRaises(ExecutionProfileError):
+                        _trusted_inventory(code, venv_isolated=invalid)
+                    with self.assertRaises(ExecutionProfileError):
+                        _trusted_inventory(code, protected=invalid)
+            with self.subTest(invalid=invalid), self.assertRaises(ExecutionProfileError):
+                _read_venv_config(self.cfg, "3.12", isolated=invalid)
+        with self.assertRaises(ExecutionProfileError):
+            _trusted_inventory(self.venv_code, protected=True, venv_isolated=False)
+
 
 if __name__ == "__main__":
     unittest.main()

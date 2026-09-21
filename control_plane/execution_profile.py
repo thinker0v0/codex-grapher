@@ -230,12 +230,18 @@ def _tree_inventory(root: Path, *, protected: bool = False) -> list[dict[str, An
     return sorted(entries, key=lambda item: item["path"])
 
 
-def trusted_code_digest(root: str | Path) -> str:
-    """Hash code and applicable copied-venv metadata; reject all links."""
+def trusted_code_digest(root: str | Path, *, isolated: bool = True) -> str:
+    """Hash exact code/venv bytes; explicit local mode permits user-owned metadata.
+
+    The default retains isolated venv protection. Profile validation separately
+    checks the complete code ownership; ownership never changes digest bytes.
+    """
+    if type(isolated) is not bool:
+        raise ExecutionProfileError("venv isolation mode must be a boolean")
     path = _path(os.fspath(root), "trusted_code_root")
     if not path.is_dir():
         raise ExecutionProfileError("trusted_code_root must be a directory")
-    return hashlib.sha256(_canonical(_trusted_inventory(path))).hexdigest()
+    return hashlib.sha256(_canonical(_trusted_inventory(path, venv_isolated=isolated))).hexdigest()
 
 
 def _venv_code_prefix(root: Path) -> tuple[Path, str] | None:
@@ -249,9 +255,11 @@ def _present(path: Path) -> bool:
     return path.exists() or path.is_symlink()
 
 
-def _read_venv_config(path: Path, minor_version: str) -> tuple[dict[str, str], bytes]:
+def _read_venv_config(path: Path, minor_version: str, *, isolated: bool = True) -> tuple[dict[str, str], bytes]:
+    if type(isolated) is not bool:
+        raise ExecutionProfileError("venv isolation mode must be a boolean")
     path = _path(str(path), "venv runtime metadata")
-    _protected(path, "venv runtime metadata", isolated=True)
+    _protected(path, "venv runtime metadata", isolated=isolated)
     before = path.lstat()
     if not stat.S_ISREG(before.st_mode) or before.st_nlink != 1:
         raise ExecutionProfileError("venv metadata must be a single-link regular file")
@@ -296,13 +304,15 @@ def _read_venv_config(path: Path, minor_version: str) -> tuple[dict[str, str], b
     return fields, raw
 
 
-def venv_runtime_metadata(python_path: str | Path, code_root: str | Path) -> tuple[Path, ...]:
-    """Return the protected cfg for a standard matching copied-venv topology.
+def venv_runtime_metadata(python_path: str | Path, code_root: str | Path, *, isolated: bool = True) -> tuple[Path, ...]:
+    """Return cfg for a matching copied venv, with strict isolated defaults.
 
     This performs no execution and supplies only explicit metadata mount inputs.
     A genuine non-venv returns an empty tuple; a detected mismatched or unsafe
     venv fails closed. The frozen profile schema gains no additional fields.
     """
+    if type(isolated) is not bool:
+        raise ExecutionProfileError("venv isolation mode must be a boolean")
     python = _path(os.fspath(python_path), "venv Python executable")
     root = _path(os.fspath(code_root), "venv trusted code root")
     topology = _venv_code_prefix(root)
@@ -316,21 +326,24 @@ def venv_runtime_metadata(python_path: str | Path, code_root: str | Path) -> tup
         raise ExecutionProfileError("venv Python and trusted code must share one standard prefix")
     if python.name not in {"python", "python3", "python" + topology[1]}:
         raise ExecutionProfileError("venv Python executable differs from the code version")
-    _protected(python, "venv Python executable", isolated=True)
-    _protected(root, "venv trusted code root", isolated=True)
+    _protected(python, "venv Python executable", isolated=isolated)
+    _protected(root, "venv trusted code root", isolated=isolated)
     if not python.is_file() or not root.is_dir():
         raise ExecutionProfileError("venv executable and trusted code topology is invalid")
-    _read_venv_config(code_cfg, topology[1])
+    _read_venv_config(code_cfg, topology[1], isolated=isolated)
     return (code_cfg,)
 
 
-def _trusted_inventory(root: Path, *, protected: bool = False) -> list[dict[str, Any]]:
+def _trusted_inventory(root: Path, *, protected: bool = False,
+                       venv_isolated: bool = True) -> list[dict[str, Any]]:
+    if type(protected) is not bool or type(venv_isolated) is not bool or (protected and not venv_isolated):
+        raise ExecutionProfileError("trusted inventory isolation mode is inconsistent")
     inventory = _tree_inventory(root, protected=protected)
     topology = _venv_code_prefix(root)
     if topology is not None:
         metadata = topology[0] / "pyvenv.cfg"
         if _present(metadata):
-            _fields, raw = _read_venv_config(metadata, topology[1])
+            _fields, raw = _read_venv_config(metadata, topology[1], isolated=venv_isolated)
             inventory.append({"path": "@venv/pyvenv.cfg", "type": "external-metadata",
                               "mode": stat.S_IMODE(metadata.stat().st_mode),
                               "bytes": len(raw), "sha256": hashlib.sha256(raw).hexdigest()})
@@ -465,14 +478,14 @@ def _validate(value: dict[str, Any], *, raw_bytes: bytes | None,
         raise ExecutionProfileError("trusted_code_root must be a directory")
     _protected(code, "trusted_code_root", isolated=isolated)
     expected_code = _hash(paths["trusted_code_sha256"], "trusted_code_sha256")
-    python_metadata = venv_runtime_metadata(tools["python"].path, code)
+    python_metadata = venv_runtime_metadata(tools["python"].path, code, isolated=isolated)
     if python_metadata:
         topology = _venv_code_prefix(code)
-        fields, _raw = _read_venv_config(python_metadata[0], topology[1])
+        fields, _raw = _read_venv_config(python_metadata[0], topology[1], isolated=isolated)
         declared_version = re.fullmatch(r"Python ([0-9]+\.[0-9]+\.[0-9]+)", tools["python"].version)
         if declared_version and declared_version[1] != fields["version"]:
             raise ExecutionProfileError("pinned Python version differs from venv metadata")
-    if hashlib.sha256(_canonical(_trusted_inventory(code, protected=isolated))).hexdigest() != expected_code:
+    if hashlib.sha256(_canonical(_trusted_inventory(code, protected=isolated, venv_isolated=isolated))).hexdigest() != expected_code:
         raise ExecutionProfileError("trusted code tree hash mismatch")
     key_paths = {}
     for name in ("signer_private_key", "signer_public_key"):

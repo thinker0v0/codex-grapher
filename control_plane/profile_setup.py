@@ -133,7 +133,7 @@ def create_execution_profile(
             "roles": {name: dict(role) for name, role in roles.items()},
             "auth": {"kind": "existing-cli-login", "account": worker_account},
             "paths": {"trusted_code_root": os.fspath(trusted_code_root),
-                      "trusted_code_sha256": trusted_code_digest(trusted_code_root),
+                      "trusted_code_sha256": trusted_code_digest(trusted_code_root, isolated=mode == "isolated-linux"),
                       "signer_private_key": os.fspath(signer_private_key),
                       "signer_public_key": os.fspath(signer_public_key)},
             "sqlite": {"profile": sqlite_profile,
