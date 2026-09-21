@@ -13,6 +13,7 @@ from pathlib import Path
 from typing import Any
 
 from control_plane.graph_schema import SchemaError, inspect_schema
+from control_plane.sqlite_runtime import SQLiteRuntimeError, connect_database
 from control_plane.evidence_ingress import IngressArtifact
 from control_plane.evidence_store import (
     EVALUATOR_IDENTITY,
@@ -99,7 +100,8 @@ class ProjectGraph:
 
     def __init__(self, database: Path, evaluator_public_key: Path | None = None,
                  rubric_sha256: str | None = None, allow_cross_thread: bool = False,
-                 evaluation_policy: TaskEvaluationPolicy | None = None):
+                 evaluation_policy: TaskEvaluationPolicy | None = None, *,
+                 sqlite_profile: str = "delete-extra", sqlite_attestation: Path | None = None):
         os.umask(0o077)
         self.database = Path(os.path.abspath(database))
         self.evaluator_public_key = evaluator_public_key
@@ -111,9 +113,13 @@ class ProjectGraph:
             raise SchemaError(
                 "runtime graph database must be explicitly created by graph_bootstrap.py --apply"
             )
-        self.connection = sqlite3.connect(
-            self.database, check_same_thread=not allow_cross_thread,
-        )
+        try:
+            self.connection = connect_database(
+                self.database, profile=sqlite_profile, attestation=sqlite_attestation,
+                check_same_thread=not allow_cross_thread,
+            )
+        except SQLiteRuntimeError as exc:
+            raise SchemaError(str(exc)) from exc
         self.connection.row_factory = sqlite3.Row
         self.connection.execute("PRAGMA foreign_keys=ON")
         # REPLACE is implemented as DELETE+INSERT by SQLite. Recursive triggers
@@ -133,7 +139,6 @@ class ProjectGraph:
         except (KeyError, PermissionError, TypeError, ValueError, RuntimeError) as exc:
             self.connection.close()
             raise SchemaError(f"runtime graph content integrity failed: {exc}") from exc
-        self.connection.execute("PRAGMA journal_mode=WAL")
         os.chmod(self.database, 0o600)
 
     def create_goal(self, goal_id: str, project: str, objective: str, accepted_sha: str,

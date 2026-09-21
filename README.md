@@ -5,11 +5,16 @@ state. Grapher stores task graphs in SQLite, produces immutable test artifacts,
 checks independent evaluator signatures, and promotes accepted commits through a
 recoverable journal.
 
-The developer workflow runs locally without a model account, hosted service or
-API key. Use it to inspect the protocol, run a complete example, and build a
-trusted local worker integration. **Experimental: the broader Hermes/Buzz
-operational release remains `NOT_PASS`.** Local task acceptance does not certify
-production isolation or deployed operation.
+Run tasks against your own clean Git repository through the Codex CLI, inspect
+the resulting evidence, recover interrupted integration, and roll back an
+accepted change. Each task freezes its allowed paths, required tests, independent
+checks, evaluation policy and execution profile before a worker starts.
+
+The deterministic demonstration needs no model account. Real repository tasks
+require an existing Codex CLI login and an explicit provider profile.
+**Experimental: the broader Hermes/Buzz operational release remains `NOT_PASS`.**
+Task acceptance and the separately evaluated portable-worker cycle do not
+certify that broader deployment.
 
 ## Install
 
@@ -22,7 +27,7 @@ network connection; the commands below execute locally after installation.
 ```bash
 git clone https://github.com/thinker0v0/codex-grapher.git
 cd codex-grapher
-python3.12 -m venv .venv
+python3.12 -m venv --copies .venv
 source .venv/bin/activate
 python -m pip install .
 codex-grapher doctor --json
@@ -35,6 +40,45 @@ sample evaluator, and promotes the accepted commit. Its successor reads the
 accepted generation. The default temporary workspace is removed afterwards.
 The sample evaluator checks this example's task assertions; it is not a general
 code reviewer. Local roles share a user account and are for trusted development.
+
+## Run your own repository task
+
+Follow the [repository workflow guide](docs/REPOSITORY_WORKFLOW.md) to provision
+an evaluation key, create a pinned execution profile with `profile create`, and
+write a task using the [example](examples/repository-workflow/README.md).
+The lifecycle commands are:
+
+```bash
+codex-grapher init --repo /absolute/source --task /absolute/task.json \
+  --profile /absolute/profile.json --workspace /absolute/new-workspace --json
+codex-grapher run --workspace /absolute/new-workspace --json
+codex-grapher status --workspace /absolute/new-workspace --json
+codex-grapher recover --workspace /absolute/new-workspace --json
+codex-grapher backup --workspace /absolute/new-workspace --output /absolute/backup.tar --json
+codex-grapher rollback --workspace /absolute/new-workspace --json
+```
+
+Source admission requires a clean, self-contained repository at the declared
+commit. Work happens in a separate checkout; promotion updates the workspace's
+accepted generation. Required tests and independent checks must both pass before
+the signer approves integration. Recovery reuses sealed evidence; an interrupted
+unsealed worker reservation pauses for operator attention.
+
+`trusted-local` runs trusted development roles under one non-root user.
+`isolated-linux` requires x86-64 Linux, an explicit root bootstrap in the initial
+kernel UID domain, four distinct non-root role identities and Linux namespaces.
+Candidate tests run without the signer's
+private key or network access. Root remains trusted; this is not isolation from
+the host administrator. In this mode Codex delegates sandbox enforcement to the
+outer runner; its inner CLI setting is explicitly `danger-full-access`, admitted
+only after the runner's boundary checks. Trusted local execution keeps Codex's
+`workspace-write` setting. Neither mode runs the actual provider as root.
+
+Backups include graph state, Git objects and custom refs, frozen inputs, all
+retained evidence and publication generations. Restore requires the original
+absolute workspace/tool paths and matching profile. Private keys and provider
+login data are excluded; a restore without the matching private signing key
+supports verification until the operator provisions it separately.
 
 ## Pause and recover a task
 
@@ -68,6 +112,11 @@ adapting the producer to your own work, see the [developer workflow](docs/DEVELO
   retains its original sections and hard gates.
 - Bounded socket framing, admission and network waits; offline read-only state
   and event inspection with clear limits on what has been verified.
+- Durable worker invocation reservations, bounded execution time and combined
+  output, and process cleanup before candidate handoff.
+- SQLite DELETE/EXTRA with one OS writer owner by default. Optional WAL/FULL
+  requires a verified fixed library actually loaded by the process. Patch status
+  and supported operating mode are reported separately by `doctor`.
 
 The database remains schema v5; runtime constructors never create or migrate it
 implicitly. The inherited route set is `nomad`, `opensource`, `business`, and
@@ -88,6 +137,12 @@ install services. The original `python examples/offline_demo.py` remains a small
 scheduling-only example that stops at `RUNNING/BLOCKED`.
 
 ## Evidence and limits
+
+The [portable-worker contract](docs/cycles/20260921-portable-workers/RUBRIC.md)
+requires installed-package tasks, actual Codex execution, observed role denials,
+guest restart/reset recovery and a fresh backup restore. Unit tests alone do not
+prove these gates. The [guest harness](examples/guest-recovery/README.md) runs in
+a disposable VM; it does not reboot or provision the host.
 
 The [reliability cycle](docs/cycles/20260921-reliability/HANDOFF.md) records the
 problem, frozen contract and [upstream research](docs/UPSTREAM.md). Improvements

@@ -633,6 +633,8 @@ def produce_required_test_results(
     artifact_root: Path,
     timeout_seconds: int = 300,
     max_output_bytes: int = DEFAULT_REQUIRED_TEST_OUTPUT_LIMIT,
+    *,
+    test_runner=None,
 ) -> list[dict[str, Any]]:
     """Run commands against one unchanged candidate with bounded exact output."""
     if not HEX40.fullmatch(candidate_sha):
@@ -646,6 +648,15 @@ def produce_required_test_results(
     if type(max_output_bytes) is not int or not 1 <= max_output_bytes <= 64 * 1024 * 1024:
         raise ValueError("required test output limit must be 1..67108864 bytes")
     workspace = workspace.resolve(strict=True)
+    if test_runner is not None:
+        # The generic workflow supplies a broker adapter. The adapter executes
+        # candidate code in the test role and copies only verified sealed output.
+        results = test_runner(workspace, commands, candidate_sha, artifact_root,
+                              timeout_seconds, max_output_bytes)
+        validate_required_test_results(results, commands, candidate_sha, artifact_root)
+        if sum(item["output"]["byte_length"] for item in results) > max_output_bytes:
+            raise PermissionError("required test output exceeds the suite limit")
+        return results
     output_dir = artifact_root / "required-tests"
     output_dir.mkdir(mode=0o700)
     results: list[dict[str, Any]] = []
@@ -750,6 +761,8 @@ def build(
     path_check: Path,
     output_dir: Path,
     attempt_number: int,
+    *,
+    test_runner=None,
 ) -> dict:
     attempt_number = _validate_attempt_number(attempt_number)
     contract_bytes = _read_stable_input(contract_path)
@@ -831,6 +844,7 @@ def build(
         required_tests = produce_required_test_results(
             attempt, contract["required_tests"], candidate_sha, staging,
             contract.get("timeout_seconds", 300),
+            test_runner=test_runner,
         )
         validate_required_test_results(
             required_tests, contract["required_tests"], candidate_sha, staging,

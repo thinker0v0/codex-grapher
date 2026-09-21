@@ -1,0 +1,55 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://codex-grapher.local/schemas/repository-task.schema.json",
+  "title": "Repository task v1",
+  "description": "Strict UTF-8 JSON, at most 1048576 bytes. The loader also rejects duplicate keys, nonfinite numbers, surrogate code points and numeric fields encoded as floating-point values. Preserve exact source bytes separately from the normalized task identity. This schema grants no execution authority.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "project_id", "task_id", "idempotency_key", "base_sha", "objective", "acceptance_criteria", "allowed_paths", "required_tests", "worker", "evaluation"],
+  "properties": {
+    "schema_version": {"type": "integer", "const": 1},
+    "project_id": {"$ref": "#/$defs/identifier"},
+    "task_id": {"$ref": "#/$defs/identifier"},
+    "idempotency_key": {"$ref": "#/$defs/identifier"},
+    "base_sha": {"type": "string", "pattern": "^[0-9a-f]{40}$(?![\\s\\S])"},
+    "objective": {"$ref": "#/$defs/text"},
+    "acceptance_criteria": {"type": "array", "minItems": 1, "maxItems": 256, "items": {"$ref": "#/$defs/text"}},
+    "allowed_paths": {
+      "type": "array", "minItems": 1, "maxItems": 256,
+      "description": "Relative Git paths under existing literal path-prefix allowlist semantics. A trailing slash denotes a directory scope; wildcard characters are not expanded by this schema.",
+      "items": {"$ref": "#/$defs/scopePath"}
+    },
+    "required_tests": {"type": "array", "minItems": 1, "maxItems": 256, "items": {"$ref": "#/$defs/text"}},
+    "worker": {
+      "type": "object", "additionalProperties": false, "required": ["backend"],
+      "properties": {"backend": {"type": "string", "const": "codex"}}
+    },
+    "limits": {
+      "type": "object", "additionalProperties": false,
+      "description": "Omitted fields use these defaults. Hard token or dollar budgets are unsupported and fail with BUDGET_UNSUPPORTED; they are never ignored.",
+      "properties": {
+        "worker_invocations": {"type": "integer", "minimum": 1, "maximum": 3, "default": 1},
+        "worker_timeout_seconds": {"type": "integer", "minimum": 1, "maximum": 3600, "default": 900},
+        "required_test_timeout_seconds": {"type": "integer", "minimum": 1, "maximum": 900, "default": 300},
+        "evaluation_timeout_seconds": {"type": "integer", "minimum": 1, "maximum": 900, "default": 300},
+        "max_output_bytes": {"type": "integer", "minimum": 1, "maximum": 8388608, "default": 8388608}
+      }
+    },
+    "evaluation": {
+      "type": "object", "additionalProperties": false, "required": ["policy", "checks"],
+      "properties": {"policy": {"$ref": "#/$defs/filePath"}, "checks": {"$ref": "#/$defs/filePath"}}
+    }
+  },
+  "$defs": {
+    "identifier": {"type": "string", "minLength": 1, "maxLength": 200, "pattern": "^[A-Za-z0-9][A-Za-z0-9_.-]*$(?![\\s\\S])"},
+    "text": {"type": "string", "minLength": 1, "maxLength": 65536, "pattern": "\\S", "not": {"pattern": "\u0000"}},
+    "scopePath": {
+      "type": "string", "minLength": 1, "maxLength": 4096,
+      "allOf": [{"pattern": "\\S"}],
+      "pattern": "^(?!/)(?![A-Za-z]:)(?!.*[\\\\\u0000-\u001f\u007f])(?!.*(?:^|/)(?:\\.|\\.\\.|\\.[gG][iI][tT])(?:/|$))(?!.*//)[^/]+(?:/[^/]+)*/?$"
+    },
+    "filePath": {
+      "allOf": [{"$ref": "#/$defs/scopePath"}, {"not": {"pattern": "/$"}}]
+    }
+  }
+}

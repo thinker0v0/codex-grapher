@@ -65,6 +65,7 @@ install -m 0755 "$repo_root/scripts/run-codex-worker.sh" /usr/local/libexec/ai-o
 install -m 0755 "$repo_root/scripts/report-hermes-project-status.sh" /usr/local/libexec/ai-ops/report-hermes-project-status
 install -o root -g ai-ops-controller -m 0750 "$repo_root/control_plane/task_controller.py" /usr/local/libexec/ai-ops/task-controller
 install -m 0644 "$repo_root/control_plane/task_controller.py" /usr/local/libexec/ai-ops/task_controller.py
+install -o root -g root -m 0644 "$repo_root/control_plane/sqlite_runtime.py" /usr/local/libexec/ai-ops/sqlite_runtime.py
 install -m 0755 "$repo_root/control_plane/codex_usage.py" /usr/local/libexec/ai-ops/codex-usage
 install -m 0755 "$repo_root/control_plane/workspace_guard.py" /usr/local/libexec/ai-ops/workspace-guard
 install -m 0755 "$repo_root/control_plane/artifact_builder.py" /usr/local/libexec/ai-ops/artifact-builder

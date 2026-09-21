@@ -205,12 +205,33 @@ class CandidateBundle:
     contract_sha256: str
 
 
+class _VerificationPublicationStore(PublicationStore):
+    """Preserve publication reads without exposing the public creation API."""
+
+    def ensure(self, source_repo: Path, repo: str, base_sha: str,
+               metadata: os.stat_result | None = None) -> PublicationPin:
+        raise PermissionError("verification-only integrator cannot mutate publications")
+
+
 class ProjectIntegrator:
     def __init__(self, repo: Path, binding: Path, evaluator_public_key: Path,
                  rubric_path: Path, accepted_ref: str,
                  expected_binding_group: str | None = None,
                  publication_root: Path | None = None,
-                 evaluation_policy: TaskEvaluationPolicy | None = None):
+                 evaluation_policy: TaskEvaluationPolicy | None = None,
+                 *, verification_owner_uid: int | None = None):
+        """Open a publisher, or a verification-only view of a trusted owner's data.
+
+        The optional owner must come from trusted configuration, never a task or
+        binding payload. Supplying it disables mutation even for the current UID.
+        This API guard complements OS permissions; it does not sandbox Python.
+        """
+        if verification_owner_uid is not None and (
+            type(verification_owner_uid) is not int
+            or not 0 <= verification_owner_uid < 2**32 - 1
+        ):
+            raise ValueError("verification owner UID must be a valid integer UID")
+        self._verification_owner_uid = verification_owner_uid
         self.repo = repo.resolve()
         self.binding = Path(os.path.abspath(binding))
         self.evaluator_public_key = Path(os.path.abspath(evaluator_public_key))
@@ -226,10 +247,22 @@ class ProjectIntegrator:
         self.accepted_ref = accepted_ref
         self.project = accepted_ref.rsplit("/", 1)[-1]
         self.expected_binding_group = expected_binding_group
-        self.publications = PublicationStore(
+        publication_store = (
+            PublicationStore if verification_owner_uid is None
+            else _VerificationPublicationStore
+        )
+        self.publications = publication_store(
             publication_root if publication_root is not None
             else self.binding.parent / "publications"
         )
+
+    @property
+    def verification_owner_uid(self) -> int | None:
+        return self._verification_owner_uid
+
+    def _require_mutation_authority(self) -> None:
+        if self._verification_owner_uid is not None:
+            raise PermissionError("verification-only integrator cannot mutate state")
 
     def assert_verification_configuration(self) -> None:
         """Refuse changed trusted key/rubric inputs before any checked effects."""
@@ -246,6 +279,7 @@ class ProjectIntegrator:
 
     @contextmanager
     def _binding_lock(self):
+        ProjectIntegrator._require_mutation_authority(self)
         lock_path = self.binding.with_suffix(self.binding.suffix + ".lock")
         descriptor = os.open(lock_path, os.O_RDWR | os.O_CREAT, 0o600)
         try:
@@ -311,6 +345,7 @@ class ProjectIntegrator:
         )
 
     def import_bundle(self, candidate: CandidateBundle) -> str:
+        ProjectIntegrator._require_mutation_authority(self)
         if sha256_file(candidate.manifest_path) != candidate.manifest_sha256:
             raise PermissionError("candidate manifest changed after preflight")
         if sha256_file(candidate.bundle_path) != candidate.bundle_sha256:
@@ -336,6 +371,7 @@ class ProjectIntegrator:
         expected_contract_id: str,
         fault_hook: FaultHook | None = None,
     ) -> dict[str, Any]:
+        ProjectIntegrator._require_mutation_authority(self)
         ProjectIntegrator.assert_verification_configuration(self)
         verify_evaluation(
             evaluation, self.evaluator_public_key, evidence_manifest, self.rubric_sha256,
@@ -359,6 +395,7 @@ class ProjectIntegrator:
         evidence_manifest: Path,
         fault_hook: FaultHook | None,
     ) -> dict[str, Any]:
+        ProjectIntegrator._require_mutation_authority(self)
         current, metadata = self._read_binding()
         current_sha = current["base_sha"]
         accepted_sha = self._ref_sha(self.accepted_ref)
@@ -408,12 +445,14 @@ class ProjectIntegrator:
         }
 
     def promotion_started(self, candidate_sha: str) -> bool:
+        ProjectIntegrator._require_mutation_authority(self)
         with self._binding_lock():
             binding, _ = self._read_binding()
             return binding["base_sha"] == candidate_sha or self._ref_sha(self.accepted_ref) == candidate_sha
 
     def reconcile_promotion(self, expected_base_sha: str, candidate_sha: str) -> str | None:
         """Finish publication -> ref -> binding ordering, or report no side effect."""
+        ProjectIntegrator._require_mutation_authority(self)
         ProjectIntegrator.assert_verification_configuration(self)
         with self._binding_lock():
             binding, metadata = self._read_binding()
@@ -434,6 +473,7 @@ class ProjectIntegrator:
     def rollback(self, expected_current_sha: str, *, expected_previous_sha: str | None = None,
                  fault_hook: FaultHook | None = None) -> dict[str, Any]:
         """Idempotently move the accepted ref and selector to its saved predecessor."""
+        ProjectIntegrator._require_mutation_authority(self)
         ProjectIntegrator.assert_verification_configuration(self)
         return self.reconcile_rollback(
             expected_current_sha, expected_previous_sha=expected_previous_sha,
@@ -444,6 +484,7 @@ class ProjectIntegrator:
         self, expected_current_sha: str, *, expected_previous_sha: str | None = None,
         require_started: bool = False, fault_hook: FaultHook | None = None,
     ) -> dict[str, Any]:
+        ProjectIntegrator._require_mutation_authority(self)
         ProjectIntegrator.assert_verification_configuration(self)
         with self._binding_lock():
             current, metadata = self._read_binding()
@@ -484,6 +525,7 @@ class ProjectIntegrator:
 
     def ensure_bound_publication(self) -> PublicationPin:
         """Materialize the initial bound generation without changing the selector."""
+        ProjectIntegrator._require_mutation_authority(self)
         with self._binding_lock():
             binding, metadata = self._read_binding()
             accepted_sha = self._ref_sha(self.accepted_ref)
@@ -545,7 +587,11 @@ class ProjectIntegrator:
         if self.binding.is_symlink() or not self.binding.is_file():
             raise PermissionError("repository binding must be a regular non-symlink file")
         metadata = self.binding.stat()
-        if stat.S_IMODE(metadata.st_mode) != 0o440 or metadata.st_uid != os.geteuid():
+        owner_uid = (
+            os.geteuid() if self._verification_owner_uid is None
+            else self._verification_owner_uid
+        )
+        if stat.S_IMODE(metadata.st_mode) != 0o440 or metadata.st_uid != owner_uid:
             raise PermissionError("repository binding owner or mode is unsafe")
         if (self.expected_binding_group is not None
                 and metadata.st_gid != grp.getgrnam(self.expected_binding_group).gr_gid):
@@ -558,6 +604,7 @@ class ProjectIntegrator:
         return {"repo": value["repo"], "base_sha": value["base_sha"]}, metadata
 
     def _atomic_write(self, value: dict[str, str], metadata: os.stat_result) -> None:
+        ProjectIntegrator._require_mutation_authority(self)
         descriptor, temporary = tempfile.mkstemp(prefix=f".{self.binding.name}.", dir=self.binding.parent)
         try:
             os.fchmod(descriptor, stat.S_IMODE(metadata.st_mode))
@@ -591,6 +638,7 @@ class ProjectIntegrator:
         return completed.stdout.strip() if completed.returncode == 0 else None
 
     def _update_ref(self, reference: str, new_sha: str, old_sha: str | None) -> None:
+        ProjectIntegrator._require_mutation_authority(self)
         command = ["git", "-C", str(self.repo), "update-ref", reference, new_sha]
         command.append(old_sha if old_sha is not None else "0" * 40)
         subprocess.run(command, check=True, capture_output=True, text=True)
@@ -599,8 +647,10 @@ class ProjectIntegrator:
         return f"refs/ai-ops/rollback/{self.project}/{candidate_sha}"
 
     def _workspace_is_clean(self) -> bool:
+        # Git status normally refreshes the index even though it is a query.
+        options = ("--no-optional-locks",) if self._verification_owner_uid is not None else ()
         uncommitted = git(
-            self.repo, "status", "--porcelain=v1", "--untracked-files=all"
+            self.repo, *options, "status", "--porcelain=v1", "--untracked-files=all"
         )
         ignored = git(
             self.repo, "ls-files", "--others", "--ignored", "--exclude-standard"

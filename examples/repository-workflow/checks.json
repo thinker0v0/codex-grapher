@@ -1,0 +1,25 @@
+{
+  "schema_version": 1,
+  "checks": [
+    {
+      "id": "independent-inclusive-cases",
+      "argv": [
+        "REPLACE_WITH_PINNED_PYTHON",
+        "-I",
+        "-B",
+        "-c",
+        "from runpy import run_path\nclamp = run_path('clamp.py')['clamp']\ncases = [(-20, -10, -2, -10), (-10, -10, -2, -10), (-7, -10, -2, -7), (-2, -10, -2, -2), (8, -10, -2, -2), (-4, -3, 9, -3), (0, -3, 9, 0), (4, -3, 9, 4), (9, -3, 9, 9), (10, -3, 9, 9), (-0.75, -0.5, 0.5, -0.5), (0.125, -0.5, 0.5, 0.125), (0.5, -0.5, 0.5, 0.5), (0.75, -0.5, 0.5, 0.5), (-9, 2, 2, 2), (2, 2, 2, 2), (12, 2, 2, 2)]\nfor value, lower, upper, expected in cases:\n    actual = clamp(value, lower, upper)\n    assert actual == expected, ((value, lower, upper), expected, actual)\nprint('Independent inclusive cases passed')"
+      ]
+    },
+    {
+      "id": "independent-reversed-bounds",
+      "argv": [
+        "REPLACE_WITH_PINNED_PYTHON",
+        "-I",
+        "-B",
+        "-c",
+        "from runpy import run_path\nclamp = run_path('clamp.py')['clamp']\nfor value, lower, upper in [(0, 2, 1), (-10, -1, -2), (0.0, 0.5, -0.5)]:\n    try:\n        clamp(value, lower, upper)\n    except ValueError:\n        continue\n    raise AssertionError(('Expected ValueError for reversed bounds', value, lower, upper))\nprint('Independent reversed-bound cases passed')"
+      ]
+    }
+  ]
+}

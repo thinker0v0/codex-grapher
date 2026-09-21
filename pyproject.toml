@@ -4,8 +4,8 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "codex-grapher"
-version = "0.1.0"
-description = "Durable local task graphs with verified artifacts and recoverable integration"
+version = "0.2.0"
+description = "Verified repository tasks with isolated workers and recoverable integration"
 readme = "README.md"
 requires-python = ">=3.12"
 license = {file = "LICENSE"}
@@ -24,3 +24,15 @@ codex-grapher = "control_plane.cli:main"
 where = ["."]
 include = ["control_plane*"]
 exclude = ["tests*"]
+
+[tool.setuptools.package-data]
+control_plane = ["resources/worker-result.schema.json"]
+
+[tool.setuptools.data-files]
+"share/codex-grapher/schemas" = ["schemas/artifact-manifest.schema.json", "schemas/authorization-envelope.schema.json", "schemas/buzz-native-event.schema.json", "schemas/evaluation-contract.schema.json", "schemas/evaluation-result.schema.json", "schemas/evidence-envelope.schema.json", "schemas/execution-profile.schema.json", "schemas/project-goal.schema.json", "schemas/project-node.schema.json", "schemas/project-runtime.schema.json", "schemas/repository-checks.schema.json", "schemas/repository-task.schema.json", "schemas/task-contract.schema.json", "schemas/task-evaluation-result.schema.json", "schemas/worker-result.schema.json"]
+"share/codex-grapher/docs" = ["docs/DEVELOPER_WORKFLOW.md", "docs/REPOSITORY_WORKFLOW.md"]
+"share/codex-grapher/examples/repository-workflow" = ["examples/repository-workflow/README.md", "examples/repository-workflow/checks.json", "examples/repository-workflow/policy.json", "examples/repository-workflow/task.template.json"]
+"share/codex-grapher/examples/repository-workflow/source" = ["examples/repository-workflow/source/clamp.py", "examples/repository-workflow/source/required_check.py"]
+"share/codex-grapher/examples/guest-recovery" = ["examples/guest-recovery/PINNING.md", "examples/guest-recovery/README.md", "examples/guest-recovery/deterministic_provider.py", "examples/guest-recovery/guest-packages-lock.json", "examples/guest-recovery/guest_driver.py", "examples/guest-recovery/toolchain-lock.json"]
+"share/codex-grapher/scripts" = ["scripts/prepare-representative-tasks.py", "scripts/provision-sqlite-runtime.sh", "scripts/verify-role-isolation.py", "scripts/verify-guest-recovery.py", "scripts/verify-workspace-backup.py"]
+"share/codex-grapher/docs/cycles/20260921-portable-workers" = ["docs/cycles/20260921-portable-workers/DECISIONS.md", "docs/cycles/20260921-portable-workers/DESIGN_AMENDMENT_V2.md", "docs/cycles/20260921-portable-workers/DESIGN_AMENDMENT_V3.md", "docs/cycles/20260921-portable-workers/provider-sandbox-provenance.json", "docs/cycles/20260921-portable-workers/HANDOFF.md", "docs/cycles/20260921-portable-workers/PROBLEM.md", "docs/cycles/20260921-portable-workers/PROJECT.md", "docs/cycles/20260921-portable-workers/RESEARCH.md", "docs/cycles/20260921-portable-workers/RUBRIC.md", "docs/cycles/20260921-portable-workers/SCAFFOLDING.md", "docs/cycles/20260921-portable-workers/SOLUTION.md", "docs/cycles/20260921-portable-workers/representative-NOTICES.txt", "docs/cycles/20260921-portable-workers/representative-task-cases.json", "docs/cycles/20260921-portable-workers/sqlite-provenance.json", "docs/cycles/20260921-portable-workers/vm-feasibility.json"]

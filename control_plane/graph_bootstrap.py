@@ -18,6 +18,7 @@ from typing import Any, Iterable
 from urllib.parse import quote
 
 from control_plane.graph_schema import SchemaError, SchemaPlan, ensure_current_schema, inspect_schema
+from control_plane.sqlite_runtime import SQLiteRuntimeError, connect_database
 from control_plane.publication_store import PublicationStore
 
 
@@ -53,7 +54,8 @@ def inspect_database(database: Path) -> SchemaPlan:
         connection.close()
 
 
-def apply_database(database: Path) -> SchemaPlan:
+def apply_database(database: Path, *, sqlite_profile: str = "delete-extra",
+                   sqlite_attestation: Path | None = None) -> SchemaPlan:
     """Explicitly create or migrate one database; callers choose the path."""
     database = Path(os.path.abspath(database))
     if database.is_symlink():
@@ -66,7 +68,11 @@ def apply_database(database: Path) -> SchemaPlan:
     if database.exists() and any(path.exists() for path in sidecars):
         raise SchemaError("schema apply requires an offline database with no journal/WAL sidecars")
     created = not database.exists()
-    connection = sqlite3.connect(database)
+    try:
+        connection = connect_database(database, create=True, profile=sqlite_profile,
+                                      attestation=sqlite_attestation, exclusive_owner=True)
+    except SQLiteRuntimeError as exc:
+        raise SchemaError(str(exc)) from exc
     try:
         connection.execute("PRAGMA foreign_keys=ON")
         result = ensure_current_schema(connection, allow_create=True)

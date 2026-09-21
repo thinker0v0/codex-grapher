@@ -139,7 +139,13 @@ class ProjectCoordinator:
     @contextmanager
     def _publication_writer_lock(self):
         """Exclude every SQLite writer across verified physical publication I/O."""
-        connection = sqlite3.connect(self.graph.database)
+        ProjectIntegrator._require_mutation_authority(self.integrator)
+        from control_plane.sqlite_runtime import connect_database
+        connection = connect_database(
+            self.graph.database, owner=self.graph.connection.owner,
+            profile=self.graph.connection.sqlite_profile,
+            attestation=self.graph.connection.sqlite_attestation,
+        )
         connection.row_factory = sqlite3.Row
         connection.execute("PRAGMA foreign_keys=ON")
         try:
@@ -164,6 +170,7 @@ class ProjectCoordinator:
         crash_hook: CrashHook | None = None,
     ) -> dict[str, Any]:
         """Preflight every immutable binding before journal, fetch, ref, or binding mutation."""
+        ProjectIntegrator._require_mutation_authority(self.integrator)
         ProjectCoordinator.assert_publication_integrity(self)
         ProjectGraph._assert_no_human_gate(self.graph.get_node(node_id))
         if self.evidence_root is not None and evidence_root.resolve() != self.evidence_root:
@@ -260,6 +267,7 @@ class ProjectCoordinator:
 
     def reconcile(self, node_id: str, candidate_sha: str,
                   crash_hook: CrashHook | None = None) -> dict[str, Any]:
+        ProjectIntegrator._require_mutation_authority(self.integrator)
         ProjectCoordinator.assert_publication_integrity(self)
         attempt = self._attempt(node_id, candidate_sha)
         self._validate_attempt_evidence(attempt)
@@ -312,6 +320,7 @@ class ProjectCoordinator:
         expected_head_version: int, crash_hook: CrashHook | None = None,
     ) -> dict[str, Any]:
         """Prepare or replay one graph-bound, version-CAS rollback operation."""
+        ProjectIntegrator._require_mutation_authority(self.integrator)
         ProjectCoordinator.assert_publication_integrity(self)
         existing = self._journal_entries(rollback_id)
         if existing:
@@ -412,6 +421,7 @@ class ProjectCoordinator:
     def reconcile_rollback(
         self, rollback_id: str, crash_hook: CrashHook | None = None,
     ) -> dict[str, Any]:
+        ProjectIntegrator._require_mutation_authority(self.integrator)
         ProjectCoordinator.assert_publication_integrity(self)
         entries = self._journal_entries(rollback_id)
         if not entries:
@@ -1043,6 +1053,7 @@ class ProjectCoordinator:
         artifact_id: str, outcome_id: str,
         expected_head_version: int, project: str,
     ) -> dict[str, Any]:
+        ProjectIntegrator._require_mutation_authority(self.integrator)
         ProjectGraph._assert_no_human_gate(self.graph.get_node(node_id))
         try:
             self.graph.connection.execute("BEGIN IMMEDIATE")
@@ -1099,6 +1110,7 @@ class ProjectCoordinator:
         crash_hook: CrashHook | None = None,
     ) -> dict[str, Any]:
         """Commit origin lifecycle, global graph rebind, journal, and head together."""
+        ProjectIntegrator._require_mutation_authority(self.integrator)
         try:
             self.graph.connection.execute("BEGIN IMMEDIATE")
             ProjectCoordinator.assert_publication_integrity(self)
@@ -1132,6 +1144,7 @@ class ProjectCoordinator:
         self, attempt: dict[str, Any], node: dict[str, Any], integration_sha: str,
         crash_hook: CrashHook | None,
     ) -> dict[str, Any]:
+        ProjectIntegrator._require_mutation_authority(self.integrator)
         attempt_id = attempt["attempt_id"]
         node_id = node["node_id"]
         if attempt["node_id"] != node_id or attempt["integration_sha"] != integration_sha:
@@ -1198,6 +1211,7 @@ class ProjectCoordinator:
         self, attempt: dict[str, Any], node: dict[str, Any], context: dict[str, Any],
         affected: dict[str, Any],
     ) -> None:
+        ProjectIntegrator._require_mutation_authority(self.integrator)
         project = context["project"]
         generation = attempt["publication_generation"] or attempt["integration_sha"]
         head = self.graph.connection.execute(
@@ -1246,6 +1260,7 @@ class ProjectCoordinator:
     def _complete_rollback(
         self, prepared: dict[str, Any], crash_hook: CrashHook | None,
     ) -> dict[str, Any]:
+        ProjectIntegrator._require_mutation_authority(self.integrator)
         try:
             self.graph.connection.execute("BEGIN IMMEDIATE")
             ProjectCoordinator.assert_publication_integrity(self)
@@ -1343,6 +1358,7 @@ class ProjectCoordinator:
         affected_graph_sha256: str, affected_graph_json: str,
         connection: sqlite3.Connection | None = None,
     ) -> dict[str, Any]:
+        ProjectIntegrator._require_mutation_authority(self.integrator)
         # The caller holds an IMMEDIATE transaction. Recheck the full logical
         # projection at the last point before any append/head mutation.
         ProjectCoordinator.assert_graph_publication_integrity(

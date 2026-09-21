@@ -39,3 +39,23 @@ jobs:
           codex-grapher demo --workspace "$RUNNER_TEMP/grapher-ci" --stop-after built --json
           codex-grapher recover --workspace "$RUNNER_TEMP/grapher-ci" --json
           codex-grapher rollback --workspace "$RUNNER_TEMP/grapher-ci" --json
+
+  fixed-sqlite:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    env:
+      PYTHONDONTWRITEBYTECODE: "1"
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
+        with:
+          python-version: "3.12"
+      - name: Build and attest task-local SQLite
+        run: |
+          bash scripts/provision-sqlite-runtime.sh --prefix "$RUNNER_TEMP/grapher-sqlite" --python "$(command -v python)"
+      - name: Verify actual fixed WAL and default avoidance
+        run: |
+          CODEX_GRAPHER_SQLITE_ATTESTATION="$RUNNER_TEMP/grapher-sqlite/attestation.json" \
+            "$RUNNER_TEMP/grapher-sqlite/bin/python-sqlite" -B -m unittest discover -s tests -p test_sqlite_runtime.py -v

@@ -204,6 +204,57 @@ include docs/cycles/20260921-portable-workers/vm-feasibility.json
 
 include docs/cycles/20260921-portable-workers/DESIGN_AMENDMENT_V2.md
 
+include control_plane/_signer_view.py
+include control_plane/_trusted_local_runner.py
+include control_plane/backup_archive.py
+include control_plane/evaluation_broker.py
+include control_plane/execution_profile.py
+include control_plane/isolated_runner.py
+include control_plane/profile_setup.py
+include control_plane/repository_task.py
+include control_plane/repository_workflow.py
+include control_plane/resources/worker-result.schema.json
+include control_plane/sealed_protocol.py
+include control_plane/sqlite_runtime.py
+include control_plane/worker_provider.py
+include control_plane/workspace_backup.py
+include docs/REPOSITORY_WORKFLOW.md
+include examples/guest-recovery/PINNING.md
+include examples/guest-recovery/README.md
+include examples/guest-recovery/deterministic_provider.py
+include examples/guest-recovery/guest-packages-lock.json
+include examples/guest-recovery/guest_driver.py
+include examples/guest-recovery/toolchain-lock.json
+include examples/repository-workflow/README.md
+include examples/repository-workflow/checks.json
+include examples/repository-workflow/policy.json
+include examples/repository-workflow/source/clamp.py
+include examples/repository-workflow/source/required_check.py
+include examples/repository-workflow/task.template.json
+include schemas/execution-profile.schema.json
+include schemas/repository-checks.schema.json
+include schemas/repository-task.schema.json
+include schemas/worker-result.schema.json
+include scripts/provision-sqlite-runtime.sh
+include scripts/prepare-representative-tasks.py
+include scripts/verify-guest-recovery.py
+include scripts/verify-role-isolation.py
+include scripts/verify-workspace-backup.py
+include tests/test_backup_archive.py
+include tests/test_evaluation_broker.py
+include tests/test_execution_profile.py
+include tests/test_execution_profile_contract.py
+include tests/test_integrator_verification_view.py
+include tests/test_profile_setup.py
+include tests/test_repository_task.py
+include tests/test_representative_preparation.py
+include tests/test_repository_workflow.py
+include tests/test_signer_view.py
+include tests/test_sqlite_runtime.py
+include tests/test_trusted_local_runner.py
+include tests/test_worker_provider.py
+include tests/test_workspace_backup.py
+
 # Defense in depth: never distribute local runtime state or private key files.
 prune .git
 prune .venv
@@ -217,3 +268,13 @@ prune .evaluator-private
 prune evidence/assessments
 exclude config/project-runtime.json
 global-exclude *.py[cod] __pycache__ .DS_Store *.pem *.key .env .env.* *.sqlite *.sqlite-* *.db *.db-*
+include control_plane/_verification_snapshot.py
+include tests/test_publication_role_permissions.py
+include docs/cycles/20260921-portable-workers/DESIGN_AMENDMENT_V3.md
+include docs/cycles/20260921-portable-workers/provider-sandbox-provenance.json
+include tests/test_verification_snapshot.py
+include tests/test_verification_snapshot_subprocess.py
+include control_plane/_boundary_attestation.py
+include control_plane/_provider_admission.py
+include tests/test_boundary_attestation.py
+include tests/test_provider_admission.py

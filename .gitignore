@@ -23,3 +23,6 @@ config/project-runtime.json
 *.sqlite-*
 *.db
 *.db-*
+
+# Local role/probe workspaces are not public source.
+evidence/portable-workers/

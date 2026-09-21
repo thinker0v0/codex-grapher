@@ -11,8 +11,9 @@ import tempfile
 import unittest
 from unittest.mock import patch
 
-from control_plane.cli import main, read_only_graph
+from control_plane.cli import main, offline_database_guard, read_only_graph
 from control_plane.graph_bootstrap import apply_database
+from control_plane.graph_schema import SchemaError
 from control_plane.project_graph import ProjectGraph
 
 
@@ -89,9 +90,13 @@ class CLITest(unittest.TestCase):
             self.assertNotIn("Traceback", output + errors)
 
     def test_live_wal_is_refused_without_ignoring_uncheckpointed_state(self):
-        graph = ProjectGraph(self.database)
+        # A foreign/legacy WAL writer is deliberately constructed outside the
+        # product's new runtime admission policy, solely to test read-only denial.
+        connection = sqlite3.connect(self.database)
         try:
-            graph.create_goal("not-checkpointed", "hynix", "Live data", "c" * 40)
+            connection.execute("PRAGMA journal_mode=WAL")
+            connection.execute("CREATE TABLE legacy_uncheckpointed(value TEXT)")
+            connection.commit()
             self.assertTrue(Path(str(self.database) + "-wal").exists())
             before = self.inventory()
             code, output, errors = self.invoke("status", "--database", str(self.database), "--json")
@@ -103,7 +108,52 @@ class CLITest(unittest.TestCase):
             self.assertEqual(errors, "")
             self.assertEqual(self.inventory(), before)
         finally:
+            connection.close()
+
+    def test_live_delete_owner_is_refused_even_without_journal_sidecars(self):
+        graph = ProjectGraph(self.database)
+        try:
+            self.assertEqual(graph.connection.execute("PRAGMA journal_mode").fetchone()[0], "delete")
+            self.assertFalse(Path(str(self.database) + "-journal").exists())
+            before = self.inventory()
+            code, output, errors = self.invoke("status", "--database", str(self.database), "--json")
+            self.assertEqual(code, 2)
+            self.assertIn("offline owner", json.loads(output)["error"])
+            self.assertEqual(errors, "")
+            self.assertEqual(self.inventory(), before)
+        finally:
             graph.connection.close()
+
+    def test_nested_offline_verification_holds_the_same_exclusive_guard(self):
+        before = self.inventory()
+        with offline_database_guard(self.database):
+            with read_only_graph(self.database) as graph:
+                self.assertEqual(graph.connection.execute("PRAGMA integrity_check").fetchone()[0], "ok")
+            # Finishing a nested verifier must not release the outer barrier.
+            with self.assertRaisesRegex(SchemaError, "owner|owned"):
+                ProjectGraph(self.database)
+        self.assertEqual(self.inventory(), before)
+        graph = ProjectGraph(self.database)
+        graph.connection.close()
+
+    @unittest.skipUnless(hasattr(os, "fork"), "requires POSIX fork")
+    def test_inherited_offline_guard_cannot_authorize_a_child(self):
+        before = self.inventory()
+        with offline_database_guard(self.database):
+            child = os.fork()
+            if child == 0:
+                try:
+                    with offline_database_guard(self.database):
+                        os._exit(10)
+                except ValueError as error:
+                    os._exit(0 if "identity changed" in str(error) else 11)
+                except BaseException:
+                    os._exit(12)
+            _, status = os.waitpid(child, 0)
+            self.assertEqual(os.waitstatus_to_exitcode(status), 0)
+            with read_only_graph(self.database) as graph:
+                self.assertEqual(graph.connection.execute("PRAGMA integrity_check").fetchone()[0], "ok")
+        self.assertEqual(self.inventory(), before)
 
     def test_dangling_sidecar_symlink_also_refuses_snapshot(self):
         Path(str(self.database) + "-wal").symlink_to(self.root / "missing-wal")
@@ -121,9 +171,11 @@ class CLITest(unittest.TestCase):
     def test_hard_link_cannot_hide_live_wal_state(self):
         alias = self.root / "alias.sqlite"
         os.link(self.database, alias)
-        graph = ProjectGraph(self.database)
+        connection = sqlite3.connect(self.database)
         try:
-            graph.create_goal("wal-only", "hynix", "Uncheckpointed", "c" * 40)
+            connection.execute("PRAGMA journal_mode=WAL")
+            connection.execute("CREATE TABLE legacy_wal_only(value TEXT)")
+            connection.commit()
             self.assertTrue(Path(str(self.database) + "-wal").exists())
             self.assertFalse(Path(str(alias) + "-wal").exists())
             before = self.inventory()
@@ -132,7 +184,7 @@ class CLITest(unittest.TestCase):
             self.assertIn("hard link", json.loads(output)["error"])
             self.assertEqual(self.inventory(), before)
         finally:
-            graph.connection.close()
+            connection.close()
 
     def test_corrupt_event_chain_fails_without_repair(self):
         with sqlite3.connect(self.database) as connection:
@@ -237,6 +289,27 @@ class CLITest(unittest.TestCase):
         self.assertEqual(code, 2)
         self.assertIn("--workspace", json.loads(output)["error"])
         self.assertEqual(errors, "")
+
+    def test_backup_and_restore_emit_the_completed_operation_receipts(self):
+        from control_plane.workspace_backup import BackupReceipt, RestoreReceipt
+        archive = self.root / "backup.tar"
+        profile = self.root / "profile.json"
+        backup = BackupReceipt(str(archive), "a" * 64, 2048, str(self.root), "workspace", 12)
+        restored = RestoreReceipt(str(self.root), "workspace", "a" * 64, True,
+                                  {"integrity_verified": True}, "provision matching signer separately")
+        with patch("control_plane.cli._workflow_kind", return_value="repository-workflow"), \
+             patch("control_plane.workspace_backup.backup_workspace", return_value=backup) as operation:
+            code, output, errors = self.invoke("backup", "--workspace", str(self.root),
+                                                "--output", str(archive), "--json")
+        operation.assert_called_once_with(self.root, archive)
+        self.assertEqual((code, errors), (0, ""))
+        self.assertEqual(json.loads(output), backup.to_dict())
+        with patch("control_plane.workspace_backup.restore_workspace", return_value=restored) as operation:
+            code, output, errors = self.invoke("restore", "--backup", str(archive),
+                                                "--workspace", str(self.root), "--profile", str(profile), "--json")
+        operation.assert_called_once_with(archive, self.root, profile)
+        self.assertEqual((code, errors), (0, ""))
+        self.assertEqual(json.loads(output), restored.to_dict())
 
     def test_text_error_has_no_traceback(self):
         code, output, errors = self.invoke("status", "--database", str(self.root / "missing"))

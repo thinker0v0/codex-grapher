@@ -95,6 +95,16 @@ class SourceDistributionTests(unittest.TestCase):
             run([sys.executable, "-m", "pip", "install", "--no-build-isolation", "--no-deps",
                  "--no-index", "--target", str(installed), str(archive)], cwd=outside)
             self.assertTrue((installed / "bin/codex-grapher").is_file())
+            public_schema = (unpacked / "schemas/worker-result.schema.json").read_bytes()
+            self.assertEqual((installed / "control_plane/resources/worker-result.schema.json").read_bytes(),
+                             public_schema)
+            resources = installed / "share/codex-grapher"
+            self.assertEqual((resources / "schemas/worker-result.schema.json").read_bytes(), public_schema)
+            for relative in ("docs/REPOSITORY_WORKFLOW.md", "examples/repository-workflow/task.template.json",
+                             "examples/guest-recovery/guest_driver.py", "scripts/verify-guest-recovery.py",
+                             "scripts/provision-sqlite-runtime.sh"):
+                self.assertTrue((resources / relative).is_file(), relative)
+            self.assertFalse((installed / "control_plane/local_private.py").exists())
             runtime_environment = {**environment, "PYTHONPATH": str(installed)}
             result = run([str(installed / "bin/codex-grapher"), "doctor", "--json"],
                          cwd=outside, env=runtime_environment)

@@ -233,8 +233,22 @@ class PublicationStore:
         else:
             self.root.mkdir(parents=True, mode=0o750)
         if metadata is not None:
+            current_mode = stat.S_IMODE(self.root.stat().st_mode)
+            expected_mode = 0o750 | (current_mode & stat.S_ISGID)
+            if current_mode & stat.S_ISGID and current_mode != expected_mode:
+                raise PermissionError("setgid publication root must be provisioned with mode 2750")
             self._set_owner(self.root, metadata.st_uid, metadata.st_gid)
-            os.chmod(self.root, 0o750)
+            # A graph publisher outside the reader group cannot restore SGID:
+            # even chmod(path, 02750) can silently clear it without CAP_FSETID.
+            # Leave an operator-provisioned 02750 root untouched so subsequent
+            # generation trees inherit the binding's reader group at creation.
+            if stat.S_IMODE(self.root.stat().st_mode) != expected_mode:
+                os.chmod(self.root, expected_mode)
+            observed = self.root.stat()
+            if (observed.st_uid, observed.st_gid, stat.S_IMODE(observed.st_mode)) != (
+                metadata.st_uid, metadata.st_gid, expected_mode,
+            ):
+                raise PermissionError("publication root ownership or permissions changed")
 
     def _require_root(self) -> None:
         if self.root.is_symlink() or not self.root.is_dir():

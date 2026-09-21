@@ -1,0 +1,10 @@
+{
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": {"type": "integer", "const": 1},
+    "status": {"type": "string", "enum": ["completed", "refused", "blocked", "failed"]},
+    "summary": {"type": "string", "minLength": 1, "maxLength": 4096}
+  },
+  "required": ["schema_version", "status", "summary"]
+}

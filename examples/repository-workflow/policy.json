@@ -1,0 +1,9 @@
+{
+  "schema_version": 1,
+  "name": "local-clamp-example-v1",
+  "sections": {
+    "correctness": {"minimum": 100, "maximum": 100}
+  },
+  "mandatory_gates": ["required_tests", "independent_checks", "authorized_scope"],
+  "threshold": 100
+}
