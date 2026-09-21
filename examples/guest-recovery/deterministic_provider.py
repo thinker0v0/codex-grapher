@@ -38,7 +38,7 @@ else:
     events = [
         {"type": "thread.started", "thread_id": "deterministic-guest-fixture", "model": "gpt-5.6-sol"},
         {"type": "turn.started"},
-        {"type": "item.completed", "item": {"type": "agent_message", "text": json.dumps({
+        {"type": "item.completed", "item": {"id": "guest-fixture-final", "type": "agent_message", "text": json.dumps({
             "schema_version": 1, "status": "completed", "summary": "Deterministic offline guest fixture."})}},
         {"type": "turn.completed", "usage": {"input_tokens": 0, "output_tokens": 0}},
     ]
