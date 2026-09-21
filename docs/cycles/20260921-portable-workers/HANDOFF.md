@@ -11,6 +11,10 @@ freeze commit. This status is not DESIGN_READY or an implementation/release pass
 Read [Design amendment v2](DESIGN_AMENDMENT_V2.md) with SOLUTION before building.
 It repairs the independent review's launcher and sealed-signing gaps, retains
 the rubric unchanged and requires independent design reevaluation.
+Read [Design amendment v3](DESIGN_AMENDMENT_V3.md) for observed Codex 0.155.1
+nested-sandbox incompatibility. P/I may implement its isolated-only fixed strategy
+only after root commits it and independent design review approves; trusted-local
+retains workspace-write, with no fallback or outer-permission relaxation.
 
 ## Approved scope and decisions
 

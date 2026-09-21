@@ -5,6 +5,10 @@ Record: `opensource.portable-workers.scaffold.v1`; owner: cycle integrator.
 Date: 2026-09-21 UTC; public; review on interface/ownership change; hash at freeze.
 Normative authority/interface correction: [Design amendment v2](DESIGN_AMENDMENT_V2.md).
 No builder starts until its independent design reevaluation passes.
+The later [provider compatibility amendment v3](DESIGN_AMENDMENT_V3.md) gates
+its specific P/I change on a new independent design review. P owns fixed argv/
+metadata and I owns the active outer-runner guard; G/B retain existing receipt
+closure/backup. No new receipt/wire, candidate authority or rubric exception.
 
 ## Bounded work units
 

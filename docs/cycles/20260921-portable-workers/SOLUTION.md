@@ -7,6 +7,10 @@ Decisions: [DECISIONS.md](DECISIONS.md). Evidence: [RESEARCH.md](RESEARCH.md).
 Normative interface correction: [Design amendment v2](DESIGN_AMENDMENT_V2.md)
 defines explicit privileged bootstrap, restricted launcher and exact sealed
 test/evaluation/signing requests; it supersedes conflicting v1 descriptions.
+Provider compatibility correction: [Design amendment v3](DESIGN_AMENDMENT_V3.md)
+defines the sole profile-derived external-sandbox exception for pinned Codex under
+an actively verified outer runner. It requires separate design approval and keeps
+all outer isolation and acceptance gates unchanged.
 
 ## Lifecycle and source preservation
 
