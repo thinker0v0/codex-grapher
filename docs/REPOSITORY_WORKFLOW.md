@@ -219,6 +219,12 @@ requires inspection; recovery must not secretly spend another model invocation.
 `--stop-after built|evaluated|promoted` exposes the corresponding durable
 boundaries during an explicitly bounded run.
 
+After artifact admission, recovery reconstructs the validation candidate from
+the admitted bundle and verifies the sealed required-test record. Lost Git
+objects in the old attempt checkout do not require another worker invocation.
+The frozen workspace and attempt directories must retain their expected paths
+and ownership; missing directory structure still fails admission.
+
 ```sh
 "$CG_PYTHON" -I -B -m control_plane recover --workspace "$CG_WORKSPACE" --json
 "$CG_PYTHON" -I -B -m control_plane rollback --workspace "$CG_WORKSPACE" --json

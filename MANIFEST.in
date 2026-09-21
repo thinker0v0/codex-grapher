@@ -281,3 +281,4 @@ include tests/test_boundary_attestation.py
 include tests/test_provider_admission.py
 include tests/test_guest_setup.py
 include tests/test_git_durability.py
+include tests/test_historical_receipt_recovery.py

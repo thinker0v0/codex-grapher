@@ -672,6 +672,46 @@ class Harness:
         if not all(self.report["assertions"].values()):
             raise AssertionError("fresh guest restore assertions failed")
 
+    def capture_failure_service_diagnostics(self):
+        # Failure evidence only: fixed disposable-fixture unit, never keys,
+        # provider captures or arbitrary guest commands. Leave time for the
+        # existing command reap (10s) and QEMU cleanup without extending deadlines.
+        diagnostics = {"scope": "fixed fixture unit; read-only failure diagnostics",
+            "maximum_collection_seconds": 20, "cleanup_reserve_seconds": 25,
+            "command_reap_reserve_seconds": 10, "entries": []}
+        self.report["failure_service_diagnostics"] = diagnostics
+        if self.process is None or self.process.poll() is not None or self.guest_dir is None or not self.port:
+            diagnostics["status"] = "SKIPPED_GUEST_NOT_RUNNING"
+            return
+        until = min(time.monotonic() + 20, self.deadline - 25)
+        commands = (
+            ("status", "sudo -n /usr/bin/systemctl --no-pager --full --lines=0 status grapher-recovery-fixture.service"),
+            ("journal", "sudo -n /usr/bin/journalctl --unit=grapher-recovery-fixture.service --boot=0 --no-pager --quiet --lines=80 --output=short-precise"),
+        )
+        for kind, command in commands:
+            # run() may spend 10s reaping a command after timeout or overflow.
+            # Reserve that allowance before dispatch, then recompute for the next.
+            budget = min(10, until - time.monotonic() - 10)
+            entry = {"kind": kind}
+            diagnostics["entries"].append(entry)
+            if budget < 3:
+                entry["status"] = "SKIPPED_INSUFFICIENT_REMAINING_BUDGET"
+                continue
+            index = len(self.report["commands"])
+            entry["timeout_seconds"] = budget
+            try:
+                code, _ = self.ssh(command, timeout=budget, check=False)
+                entry.update(status="RECORDED", exit=code)
+            except BaseException as exc:
+                entry.update(status="CAPTURE_ERROR", error_type=type(exc).__name__)
+                if not isinstance(exc, Exception):
+                    diagnostics["status"] = "INTERRUPTED"
+                    return
+            finally:
+                if len(self.report["commands"]) > index:
+                    entry["recorded_command_index"] = index
+        diagnostics["status"] = "FINISHED"
+
     def execute(self):
         try:
             self.prepare()
@@ -692,6 +732,11 @@ class Harness:
         except BaseException as exc:
             self.report["status"] = "INCOMPLETE"
             self.report["error"] = {"type": type(exc).__name__, "message": str(exc)}
+            try:
+                self.capture_failure_service_diagnostics()
+            except BaseException as diagnostic_error:
+                self.report["failure_service_diagnostics"] = {
+                    "status": "CAPTURE_UNAVAILABLE", "error_type": type(diagnostic_error).__name__}
             raise
         finally:
             self.stop()

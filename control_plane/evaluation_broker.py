@@ -815,7 +815,14 @@ class EvaluationBroker:
         receipt_id = None
         with self.frozen.verify_evaluation(request) as verified:
             required = self.store.fetch(request["required_receipt_id"])
-            required_request = self.frozen.required_request(required["run_id"])
+            expected_run = f"{self.frozen.task['task_id']}-attempt-{verified['artifact']['attempt']}-required"
+            if required["kind"] != "required" or required["run_id"] != expected_run:
+                raise PermissionError("required receipt belongs to another admitted attempt")
+            # This is verification of sealed history, not another required run.
+            # Preserve the original request's frozen path/hash without reading
+            # an old worker checkout whose unneeded Git objects may be lost.
+            # The signer already uses this exact immutable reconstruction.
+            required_request = _receipt_request(required, self.frozen)
             _receipt_matches(required, required_request, self.frozen)
             if required["candidate_sha"] != verified["artifact"]["candidate_sha"]:
                 raise PermissionError("required receipt belongs to another artifact candidate")
@@ -833,6 +840,8 @@ class EvaluationBroker:
             _git(self.profile, temporary_root, "fetch", "--quiet", str(verified["manifest_path"].parent / verified["manifest"]["bundle"]["path"]), "HEAD")
             _git(self.profile, temporary_root, "checkout", "--quiet", "--detach", candidate_sha)
             verify_candidate_scope(self.profile, temporary_root, candidate_sha, self.frozen.task["base_sha"], self.frozen.task["allowed_paths"])
+            if candidate_tree_sha256(temporary_root, self.profile, candidate_sha) != required["pre_tree_sha256"]:
+                raise PermissionError("admitted bundle candidate differs from sealed required-test tree")
             test_request = validate_candidate_test_request({
                 "schema_version": 1, "run_id": "independent-" + digest(request), "kind": "independent",
                 "candidate_root": str(temporary_root), "candidate_sha": candidate_sha,
