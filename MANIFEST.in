@@ -1,5 +1,6 @@
 # Explicit public source allowlist. Runtime workspaces and new evidence are never globbed.
 # Keep development docs, validation inputs and helper modules usable from the sdist.
+global-exclude *
 include .gitignore
 include AGENTS.md
 include CHANGELOG.md

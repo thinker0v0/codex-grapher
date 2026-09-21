@@ -37,13 +37,15 @@ class SourceDistributionTests(unittest.TestCase):
             # These are inert marker files, not real credentials or runtime data.
             excluded = [".env", ".evaluator-private/local.pem", "config/project-runtime.json",
                         "artifacts/result.json", "evidence/assessments/unreviewed.json",
-                        "docs/unreviewed.json", "secrets/local.key", "graph.sqlite"]
+                        "docs/unreviewed.json", "secrets/local.key", "graph.sqlite",
+                        "control_plane/local_private.py", "tests/test_unreviewed.py"]
             for relative in excluded:
                 path = source / relative
                 path.parent.mkdir(parents=True, exist_ok=True)
                 path.write_text("not part of the public distribution\n")
             environment = {**os.environ, "PYTHONDONTWRITEBYTECODE": "1",
-                           "PIP_DISABLE_PIP_VERSION_CHECK": "1", "PIP_NO_INDEX": "1"}
+                           "PIP_DISABLE_PIP_VERSION_CHECK": "1", "PIP_NO_INDEX": "1",
+                           "PIP_NO_CACHE_DIR": "1"}
             environment.pop("PYTHONPATH", None)
 
             def run(arguments, *, cwd, env=environment):
