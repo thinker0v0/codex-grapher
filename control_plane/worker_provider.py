@@ -21,6 +21,8 @@ MODEL = "gpt-5.6-sol"
 MAX_PROMPT_BYTES = 262_144
 MAX_OUTPUT_BYTES = 8 * 1024 * 1024
 MAX_PROTOCOL_EVENTS = 65_536
+MAX_DIAGNOSTIC_BYTES = 32_768
+MAX_DIAGNOSTIC_FIELDS = 8
 CLEANUP_GRACE_SECONDS = 5.0
 SAFE_ID = re.compile(r"[A-Za-z0-9][A-Za-z0-9_.-]{0,199}\Z")
 HEX40 = re.compile(r"[0-9a-f]{40}\Z")
@@ -300,7 +302,7 @@ def _usage(counters: Any) -> dict | None:
     return counters
 
 
-def parse_codex_jsonl(output: bytes) -> dict:
+def parse_codex_jsonl(output: bytes, *, _diagnostic_state: dict | None = None) -> dict:
     """Strict single-turn 0.155.1 protocol. Tool failures may be repaired in-turn."""
     if not isinstance(output, bytes) or not output or len(output) > MAX_OUTPUT_BYTES:
         raise ValueError("missing, oversized or truncated provider stream")
@@ -311,10 +313,13 @@ def parse_codex_jsonl(output: bytes) -> dict:
     turn_started = False
     terminal = None
     messages: list[str] = []
+    message_lines: list[int] = []
     usage = None
     observed_model = None
     provider_error = False
-    for line in lines:
+    for line_number, line in enumerate(lines, 1):
+        if _diagnostic_state is not None:
+            _diagnostic_state["line"] = line_number
         event = strict_loads(line)
         if not isinstance(event, dict) or not isinstance(event.get("type"), str):
             raise ValueError("invalid provider event")
@@ -366,6 +371,7 @@ def parse_codex_jsonl(output: bytes) -> dict:
                 if not isinstance(item.get("text"), str):
                     raise ValueError("invalid agent message")
                 messages.append(item["text"])
+                message_lines.append(line_number)
         else:
             raise ValueError("unsupported provider event")
     if terminal is None:
@@ -375,7 +381,9 @@ def parse_codex_jsonl(output: bytes) -> dict:
         # Commentary may precede the single schema-valid final message. Earlier
         # schema-valid results are contradictory and never silently overwritten.
         results = []
-        for text in messages:
+        for message_index, text in enumerate(messages):
+            if _diagnostic_state is not None:
+                _diagnostic_state["line"] = message_lines[message_index]
             try:
                 decoded = strict_loads(text)
             except (UnicodeError, ValueError):
@@ -384,11 +392,168 @@ def parse_codex_jsonl(output: bytes) -> dict:
                 results.append(_result(decoded))
         if len(results) != 1 or not messages:
             raise ValueError("missing or duplicate structured worker result")
+        if _diagnostic_state is not None:
+            _diagnostic_state["line"] = message_lines[-1]
         if _result(strict_loads(messages[-1])) != results[0]:
             raise ValueError("structured result must be the final message")
         completion = results[0]
     return {"completion": completion, "session_id": session,
             "usage_observed": usage, "model": observed_model}
+
+
+_DIAGNOSTIC_REASONS = {
+    "missing, oversized or truncated provider stream": "STREAM_INVALID",
+    "too many provider events": "EVENT_LIMIT",
+    "duplicate JSON key": "DUPLICATE_JSON_KEY",
+    "nonfinite JSON number": "NONFINITE_JSON_NUMBER",
+    "invalid provider event": "EVENT_INVALID",
+    "provider event after terminal": "EVENT_AFTER_TERMINAL",
+    "provider model mismatch": "MODEL_MISMATCH",
+    "unsupported session fields": "SESSION_FIELDS_UNSUPPORTED",
+    "duplicate or misplaced session": "SESSION_ORDER_INVALID",
+    "unsupported turn fields": "TURN_FIELDS_UNSUPPORTED",
+    "duplicate or misplaced turn": "TURN_ORDER_INVALID",
+    "unsupported or contradictory terminal fields": "TERMINAL_FIELDS_INVALID",
+    "terminal without turn": "TERMINAL_WITHOUT_TURN",
+    "invalid observed usage": "USAGE_INVALID",
+    "invalid observed usage counter": "USAGE_COUNTER_INVALID",
+    "item outside turn": "ITEM_OUTSIDE_TURN",
+    "invalid provider item": "ITEM_INVALID",
+    "unsupported agent message fields": "AGENT_FIELDS_UNSUPPORTED",
+    "invalid agent message": "AGENT_MESSAGE_INVALID",
+    "unsupported provider event": "EVENT_UNSUPPORTED",
+    "missing provider terminal": "TERMINAL_MISSING",
+    "missing or duplicate structured worker result": "STRUCTURED_RESULT_COUNT_INVALID",
+    "structured result must be the final message": "STRUCTURED_RESULT_NOT_FINAL",
+    "unknown final result": "STRUCTURED_RESULT_STATUS_INVALID",
+    "invalid result summary": "STRUCTURED_RESULT_SUMMARY_INVALID",
+}
+_DIAGNOSTIC_KEYS = frozenset({
+    "type", "thread_id", "model", "usage", "error", "item", "id", "text",
+    "phase", "status", "message", "details", "reason", "code", "command",
+    "aggregated_output", "exit_code", "arguments", "result", "tool_name",
+    "schema_version", "summary", "input_tokens", "cached_input_tokens",
+    "cache_write_input_tokens", "output_tokens", "reasoning_output_tokens",
+})
+_DIAGNOSTIC_EVENTS = frozenset({"thread.started", "turn.started", "turn.completed",
+                                "turn.failed", "error", "item.started", "item.updated", "item.completed"})
+_DIAGNOSTIC_ITEMS = frozenset({"agent_message", "command_execution", "file_change",
+                               "mcp_tool_call", "web_search", "todo_list", "reasoning", "error", "refusal"})
+
+
+def _diagnostic_kind(value: Any) -> str:
+    if value is None:
+        return "null"
+    return {dict: "object", list: "array", str: "string", bool: "boolean",
+            int: "integer", float: "number"}.get(type(value), "invalid")
+
+
+def _diagnostic_fields(value: dict) -> dict:
+    """Unknown names become hashes; field values never enter diagnostics."""
+    fields = []
+    for key in sorted(value)[:MAX_DIAGNOSTIC_FIELDS]:
+        name = key if key in _DIAGNOSTIC_KEYS else None
+        fields.append({"name": name, "name_sha256": None if name is not None else _sha(key.encode("utf-8", "surrogatepass")),
+                       "kind": _diagnostic_kind(value[key])})
+    return {"fields": fields, "field_count": len(value)}
+
+
+def _diagnostic_label(value: Any, allowed: frozenset[str]) -> dict:
+    return {"value": value if type(value) is str and value in allowed else None,
+            "sha256": _sha(value.encode("utf-8", "surrogatepass")) if type(value) is str and value not in allowed else None,
+            "kind": _diagnostic_kind(value)}
+
+
+def _diagnostic_event(line_number: int, line: bytes) -> dict:
+    record = {"line": line_number, "line_bytes": len(line), "line_sha256": _sha(line)}
+    try:
+        value = strict_loads(line)
+    except (ValueError, UnicodeError, TypeError, RecursionError):
+        return {**record, "json_kind": "invalid"}
+    record["json_kind"] = _diagnostic_kind(value)
+    if type(value) is not dict:
+        return record
+    record.update(_diagnostic_fields(value))
+    record["event_type"] = _diagnostic_label(value.get("type"), _DIAGNOSTIC_EVENTS)
+    item = value.get("item")
+    if type(item) is dict:
+        record["item"] = {**_diagnostic_fields(item), "item_type": _diagnostic_label(item.get("type"), _DIAGNOSTIC_ITEMS)}
+        if item.get("type") == "agent_message" and type(item.get("text")) is str:
+            raw_text = item["text"].encode("utf-8", "surrogatepass")
+            text_shape = {"bytes": len(raw_text), "sha256": _sha(raw_text)}
+            try:
+                decoded = strict_loads(raw_text)
+                text_shape["json_kind"] = _diagnostic_kind(decoded)
+                if type(decoded) is dict:
+                    text_shape.update(_diagnostic_fields(decoded))
+            except (ValueError, UnicodeError, TypeError, RecursionError):
+                text_shape["json_kind"] = "invalid"
+            record["item"]["text_shape"] = text_shape
+    return record
+
+
+def protocol_diagnostics(stdout: bytes, stderr: bytes, error: Exception | None,
+                         *, error_line: int | None = None) -> dict:
+    """Bounded structural diagnostics: no message, command, ID or exception text."""
+    if type(stdout) is not bytes or type(stderr) is not bytes:
+        raise WorkerProviderError("DURABLE_STATE_INVALID", "diagnostic inputs must be captured bytes")
+    if error is None:
+        code = None
+        error_line = None
+    elif isinstance(error, UnicodeError):
+        code = "UTF8_INVALID"
+    elif isinstance(error, json.JSONDecodeError):
+        code = "JSON_INVALID"
+    elif isinstance(error, RecursionError):
+        code = "JSON_DEPTH_INVALID"
+    elif isinstance(error, WorkerProviderError):
+        code = "SCHEMA_INVALID"
+    elif isinstance(error, TypeError):
+        code = "VALUE_TYPE_INVALID"
+    else:
+        # Compare only finite known literals; never serialize exception strings.
+        message = error.args[0] if len(error.args) == 1 and type(error.args[0]) is str else None
+        code = _DIAGNOSTIC_REASONS.get(message, "PROTOCOL_INVALID")
+    lines = stdout[:MAX_OUTPUT_BYTES].splitlines()
+    if type(error_line) is not int or not 1 <= error_line <= len(lines):
+        error_line = None
+    result = {
+        "schema_version": 1, "parser": "codex-0.155.1-jsonl-v1",
+        "parse_status": "accepted" if error is None else "rejected",
+        "error_code": code, "error_line": error_line,
+        "stdout": {"sha256": _sha(stdout), "bytes": len(stdout)},
+        "stderr": {"sha256": _sha(stderr), "bytes": len(stderr)},
+        "analyzed_line_count": len(lines), "analysis_truncated": len(stdout) > MAX_OUTPUT_BYTES,
+        "event_shapes": [], "omitted_line_count": len(lines),
+    }
+    selected = []
+    if error_line is not None:
+        selected.extend(index for index in (error_line, error_line - 1, error_line + 1) if 1 <= index <= len(lines))
+    selected.extend(range(1, min(len(lines), 16) + 1))
+    selected.extend(range(max(1, len(lines) - 15), len(lines) + 1))
+    for number in dict.fromkeys(selected):
+        shape = _diagnostic_event(number, lines[number - 1])
+        result["event_shapes"].append(shape)
+        result["omitted_line_count"] = len(lines) - len(result["event_shapes"])
+        if len(canonical_bytes(result)) > MAX_DIAGNOSTIC_BYTES:
+            result["event_shapes"].pop()
+            result["omitted_line_count"] += 1
+    result["event_shapes"].sort(key=lambda shape: shape["line"])
+    return result
+
+
+def _retain_diagnostics(request: dict, profile: Any, stdout: bytes, stderr: bytes,
+                        diagnostic: dict) -> None:
+    # The authorized retention capability belongs only to the isolated root
+    # broker. No local file fallback, preflight capture or public output exists.
+    if profile.mode != "isolated-linux":
+        return
+    try:
+        from .isolated_runner import retain_provider_diagnostics
+    except ImportError:
+        raise WorkerProviderError("DURABLE_STATE_INVALID", "private provider diagnostic sink unavailable") from None
+    if retain_provider_diagnostics(request, profile, stdout, stderr, diagnostic) is not None:
+        raise WorkerProviderError("DURABLE_STATE_INVALID", "invalid private provider diagnostic sink response")
 
 
 def _reservation(request: dict) -> None:
@@ -462,10 +627,14 @@ def execute_worker(request: dict, profile: Any) -> dict:
     stdout, stderr = result.stdout, result.stderr
     protocol = {"completion": "PROTOCOL_INVALID", "session_id": None,
                 "usage_observed": None, "model": None}
+    parse_state: dict = {}
+    parse_error = None
     try:
-        protocol = parse_codex_jsonl(stdout)
-    except (ValueError, UnicodeError, TypeError, RecursionError):
-        pass
+        protocol = parse_codex_jsonl(stdout, _diagnostic_state=parse_state)
+    except (ValueError, UnicodeError, TypeError, RecursionError) as error:
+        parse_error = error
+    _retain_diagnostics(request, profile, stdout, stderr,
+                        protocol_diagnostics(stdout, stderr, parse_error, error_line=parse_state.get("line")))
     completion = protocol["completion"]
     if not result.descendants_reaped:
         completion = "CLEANUP_FAILED"

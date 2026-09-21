@@ -314,8 +314,16 @@ class WorkspaceBackupRoundTripTests(unittest.TestCase):
     def test_bootstrap_barrier_and_runtime_control_paths(self):
         import fcntl
         import socket
-        from control_plane.workspace_backup import backup_workspace
+        from control_plane.workspace_backup import backup_workspace, _runtime_excludes, _role_names
         from control_plane.backup_archive import inspect_archive
+        from control_plane.isolated_runner import workspace_socket_paths
+        from control_plane.execution_profile import load_execution_profile
+        from control_plane._verification_snapshot import verification_snapshot
+        endpoints = (*workspace_socket_paths(self.root), self.root / ".worker-control.sock",
+                     self.root / "state/task-attempt-1.control.sock")
+        for endpoint in endpoints:
+            with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as server:
+                server.bind(str(endpoint))
         lock = self.root / ".bootstrap.lock"
         descriptor = os.open(lock, os.O_CREAT | os.O_RDWR, 0o600)
         try:
@@ -324,14 +332,17 @@ class WorkspaceBackupRoundTripTests(unittest.TestCase):
                 backup_workspace(self.root, self.archive)
         finally:
             os.close(descriptor)
-        control = self.root / "state/task-attempt-1.control.sock"
-        with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as server:
-            server.bind(str(control))
         backup_workspace(self.root, self.archive)
         names = {entry["path"] for entry in inspect_archive(self.archive)["entries"]}
         self.assertNotIn(".bootstrap.lock", names)
-        self.assertNotIn("state/task-attempt-1.control.sock", names)
-        self.assertTrue(control.exists())
+        for endpoint in endpoints:
+            self.assertNotIn(endpoint.relative_to(self.root).as_posix(), names)
+            self.assertTrue(endpoint.exists())
+        profile = load_execution_profile(self.profile)
+        with verification_snapshot(self.root, profile, original_root=self.root,
+                                   excludes=_runtime_excludes(self.root), role_for_path=_role_names) as snapshot:
+            for endpoint in endpoints:
+                self.assertFalse((snapshot.root / endpoint.relative_to(self.root)).exists())
 
     def test_public_verification_script_uses_the_real_backup_api(self):
         import sys
@@ -392,13 +403,29 @@ class WorkspaceBackupRoundTripTests(unittest.TestCase):
                 patch("control_plane.worker_provider.provider_preflight", return_value={"fixture": True}):
             result = run_repository_workflow(self.root, stop_after="built")
         self.assertEqual(result["workflow_state"], "built")
+        private = self.root / ".broker-receipts/.private"
+        raw_markers = []
+        for name in ("provider-diagnostics-" + "a" * 64,
+                     ".provider-diagnostics-staging-" + "b" * 32):
+            diagnostics = private / name
+            diagnostics.mkdir(mode=0o700)
+            for stream in ("stdout", "stderr"):
+                marker = f"synthetic private {name} {stream} must stay outside archive\n".encode()
+                (diagnostics / (stream + ".bin")).write_bytes(marker)
+                raw_markers.append(marker)
+            (diagnostics / "diagnostic.json").write_text('{"fixture":true}')
         backup_workspace(self.root, self.archive)
         manifest = inspect_archive(self.archive)
         self.assertEqual(len(manifest["metadata"]["closure"]["attempt_provenance"]), 1)
         self.assertFalse(any(entry["path"].startswith(".broker-receipts/.private") for entry in manifest["entries"]))
+        archived = self.archive.read_bytes()
+        self.assertTrue(all(marker not in archived for marker in raw_markers))
+        self.assertTrue(all((private / name).is_dir() for name in (
+            "provider-diagnostics-" + "a" * 64, ".provider-diagnostics-staging-" + "b" * 32)))
         self.root.rename(self.base / "offline-original")
         receipt = restore_workspace(self.archive, self.root, self.profile)
         self.assertEqual(len(receipt.closure["attempt_provenance"]), 1)
+        self.assertFalse((self.root / ".broker-receipts/.private").exists())
 
 
 @unittest.skipUnless(os.geteuid() == 0, "semantic non-root ownership restoration needs root")

@@ -12,6 +12,8 @@ from unittest import mock
 
 from control_plane import worker_provider as provider
 from control_plane.execution_profile import ExecutionProfile, Role, Tool
+# Freeze real provider/runner identities before boundary fixtures patch helpers.
+from control_plane import isolated_runner
 
 
 def digest(value):
@@ -174,6 +176,9 @@ class ProviderBoundaryFixtures(unittest.TestCase):
         self.boundary_patch = mock.patch.object(provider, "_assert_boundary")
         self.boundary_patch.start()
         self.addCleanup(self.boundary_patch.stop)
+        self.retention_patch = mock.patch.object(provider, "_retain_diagnostics")
+        self.retention_sink = self.retention_patch.start()
+        self.addCleanup(self.retention_patch.stop)
         self.addCleanup(self.tmp.cleanup)
 
     def reserve(self):
@@ -367,6 +372,7 @@ class ProviderBoundaryFixtures(unittest.TestCase):
         self.assertTrue(all(call.args[0] is None for call in runner.call_args_list))
         self.assertFalse(report["inference_invoked"])
         self.assertNotIn("ChatGPT", json.dumps(report))
+        self.retention_sink.assert_not_called()
 
     def test_preflight_rejects_api_auth_old_version_and_missing_security_flag(self):
         good = [process(provider.CLI_VERSION.encode()), process(b"--ask-for-approval"),
@@ -469,6 +475,128 @@ class ProviderBoundaryFixtures(unittest.TestCase):
             with self.assertRaisesRegex(provider.WorkerProviderError, "INVALID_TASK"):
                 provider.execute_worker(request, self.profile)
             runner.assert_not_called()
+
+    def test_rejected_exec_stream_goes_only_to_private_sink_with_sanitized_diagnostics(self):
+        values = events(usage={"input_tokens": 5})
+        values[2]["item"]["unknown_extra"] = "RAW_MODEL_SENTINEL"
+        output = stream(values)
+        receipt, runner = self.execute(process(output, stderr=b"RAW_STDERR_SENTINEL"))
+        self.assertEqual(receipt["completion"], "PROTOCOL_INVALID")
+        self.assertIsNone(receipt["session_id"])
+        self.assertIsNone(receipt["usage_observed"])
+        self.assertEqual(runner.call_count, 2)
+        args = self.retention_sink.call_args.args
+        self.assertEqual(args[:4], (self.request, self.profile, output, b"RAW_STDERR_SENTINEL"))
+        self.assertEqual(args[4]["error_code"], "AGENT_FIELDS_UNSUPPORTED")
+        self.assertEqual(args[4]["error_line"], 3)
+        encoded = provider.canonical_bytes(args[4])
+        for secret in (b"RAW_MODEL_SENTINEL", b"RAW_STDERR_SENTINEL", b"fixture-session", b"unknown_extra"):
+            self.assertNotIn(secret, encoded)
+        self.assertEqual(set(receipt), provider.RECEIPT_FIELDS)
+
+    def test_capture_failure_closes_before_post_head_or_receipt(self):
+        self.retention_sink.side_effect = PermissionError("private capture unavailable")
+        with mock.patch.object(provider, "_run", side_effect=[
+                process((self.request["base_sha"] + "\n").encode()), process(stream(events()))]) as runner:
+            with self.assertRaisesRegex(PermissionError, "private capture unavailable"):
+                provider.execute_worker(self.request, self.profile)
+            self.assertEqual(runner.call_count, 2)
+
+    def test_private_retention_never_falls_back_when_capability_missing(self):
+        self.retention_patch.stop()
+        module = types.ModuleType("control_plane.isolated_runner")
+        with mock.patch.dict("sys.modules", {"control_plane.isolated_runner": module}):
+            with self.assertRaisesRegex(provider.WorkerProviderError, "sink unavailable"):
+                provider._retain_diagnostics(self.request, self.profile, b"x", b"", {})
+
+    def test_trusted_local_has_no_private_retention_capability(self):
+        self.retention_patch.stop()
+        self.profile = replace(self.profile, mode="trusted-local")
+        with mock.patch("control_plane.isolated_runner.retain_provider_diagnostics", create=True) as sink:
+            provider._retain_diagnostics(self.request, self.profile, b"x", b"", {})
+            sink.assert_not_called()
+
+
+class ProtocolDiagnosticTests(unittest.TestCase):
+    def diagnostic(self, output, stderr=b""):
+        state = {}
+        error = None
+        try:
+            provider.parse_codex_jsonl(output, _diagnostic_state=state)
+        except (ValueError, UnicodeError, TypeError, RecursionError) as caught:
+            error = caught
+        return provider.protocol_diagnostics(output, stderr, error, error_line=state.get("line"))
+
+    def test_sanitizer_retains_only_shape_and_hashes(self):
+        values = events()
+        values[0]["thread_id"] = "PRIVATE_SESSION_SENTINEL"
+        values[2]["item"]["text"] = json.dumps({"schema_version": 1, "status": "completed", "summary": "PRIVATE_SUMMARY_SENTINEL"})
+        result = self.diagnostic(stream(values), b"PRIVATE_STDERR_SENTINEL")
+        self.assertEqual(result["parse_status"], "accepted")
+        self.assertIsNone(result["error_code"])
+        self.assertIsNone(result["error_line"])
+        self.assertEqual(result["stdout"]["sha256"], digest(stream(values)))
+        encoded = provider.canonical_bytes(result)
+        for value in (b"PRIVATE_SESSION_SENTINEL", b"PRIVATE_SUMMARY_SENTINEL", b"PRIVATE_STDERR_SENTINEL"):
+            self.assertNotIn(value, encoded)
+
+    def test_rejection_line_and_finite_code_without_exception_fragments(self):
+        values = events(); values[2]["item"]["opaque-secret-key"] = "SECRET_VALUE_SENTINEL"
+        result = self.diagnostic(stream(values))
+        self.assertEqual((result["parse_status"], result["error_code"], result["error_line"]),
+                         ("rejected", "AGENT_FIELDS_UNSUPPORTED", 3))
+        encoded = provider.canonical_bytes(result)
+        self.assertNotIn(b"opaque-secret-key", encoded)
+        self.assertNotIn(b"SECRET_VALUE_SENTINEL", encoded)
+        result = provider.protocol_diagnostics(b"{}", b"", ValueError("PRIVATE_EXCEPTION_SENTINEL"))
+        self.assertEqual(result["error_code"], "PROTOCOL_INVALID")
+        self.assertNotIn(b"PRIVATE_EXCEPTION_SENTINEL", provider.canonical_bytes(result))
+
+    def test_missing_duplicate_terminal_and_refusal_rules_unchanged(self):
+        for output, status, code in ((stream(events()[:-1]), "rejected", "TERMINAL_MISSING"),
+                                     (stream(events() + [events()[-1]]), "rejected", "EVENT_AFTER_TERMINAL"),
+                                     (stream(events("refused")), "accepted", None)):
+            with self.subTest(code=code):
+                result = self.diagnostic(output)
+                self.assertEqual((result["parse_status"], result["error_code"]), (status, code))
+        self.assertEqual(provider.parse_codex_jsonl(stream(events("refused")))["completion"], "REFUSED")
+
+    def test_malformed_utf8_json_and_nested_duplicate_have_safe_codes(self):
+        for output, code in ((b"\xff\n", "UTF8_INVALID"), (b'{"SECRET_FRAGMENT"\n', "JSON_INVALID"),
+                             (b'{"type":"thread.started","thread_id":"x","nested":{"a":1,"a":2}}\n', "DUPLICATE_JSON_KEY")):
+            with self.subTest(code=code):
+                result = self.diagnostic(output)
+                self.assertEqual(result["error_code"], code)
+                self.assertNotIn(b"SECRET_FRAGMENT", provider.canonical_bytes(result))
+
+    def test_large_stream_shape_capture_is_capped_and_prioritizes_failure(self):
+        values = events()[:2]
+        for index in range(512):
+            values.append({"type": "item.completed", "item": {
+                "type": "command_execution", **{f"unknown_{number}_{index}": "RAW_TOOL_TEXT_SENTINEL" for number in range(20)}}})
+        output = stream(values)
+        result = provider.protocol_diagnostics(output, b"", ValueError("invalid provider item"), error_line=257)
+        self.assertLessEqual(len(provider.canonical_bytes(result)), provider.MAX_DIAGNOSTIC_BYTES)
+        self.assertGreater(result["omitted_line_count"], 0)
+        self.assertIn(257, [shape["line"] for shape in result["event_shapes"]])
+        self.assertNotIn(b"RAW_TOOL_TEXT_SENTINEL", provider.canonical_bytes(result))
+        for shape in result["event_shapes"]:
+            self.assertLessEqual(len(shape.get("fields", [])), provider.MAX_DIAGNOSTIC_FIELDS)
+            self.assertLessEqual(len(shape.get("item", {}).get("fields", [])), provider.MAX_DIAGNOSTIC_FIELDS)
+
+    def test_escaped_surrogates_cannot_break_diagnostic_retention(self):
+        output = b'{"type":"\\ud800","\\ud800":"sensitive"}\n'
+        result = self.diagnostic(output)
+        self.assertEqual(result["parse_status"], "rejected")
+        self.assertNotIn(b"sensitive", provider.canonical_bytes(result))
+
+    def test_schema_valid_final_message_diagnostics_do_not_change_parser_result(self):
+        output = stream(events(usage={"input_tokens": 19, "output_tokens": 4}))
+        baseline = provider.parse_codex_jsonl(output)
+        state = {}
+        observed = provider.parse_codex_jsonl(output, _diagnostic_state=state)
+        self.assertEqual(observed, baseline)
+        self.assertEqual(self.diagnostic(output)["parse_status"], "accepted")
 
 
 class SchemaLayoutTests(unittest.TestCase):

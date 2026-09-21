@@ -288,6 +288,22 @@ boundary. This setup does not isolate that login from the provider process or
 commands it launches under the same worker identity. Candidate tests must have neither that login home nor network
 or signer access. There is no automatic API-billed fallback.
 
+## Provider diagnostics
+
+In `isolated-linux`, each admitted provider execution retains bounded stdout,
+stderr and a structural `diagnostic.json` in the root-only workspace directory
+`.broker-receipts/.private/provider-diagnostics-<request-sha256>/`. Only the root
+operator can read this directory. The JSON contains finite error categories and
+event shapes; it excludes message text, commands, identifiers and exception text.
+The raw streams may contain project content and stay private. Preflight, login
+and Git-probe output is not captured by this mechanism.
+
+Retention is bound to the actual process output and frozen request. Capture
+failure prevents a worker receipt; retaining output never changes acceptance or
+refunds an invocation. The directory is excluded from Git, distributions,
+verification snapshots and workspace backups. Restore therefore preserves the
+signed workflow evidence without restoring these private diagnostic streams.
+
 ## Backup, restore and runtime limits
 
 The default SQLite profile is `delete-extra`: writable connections require

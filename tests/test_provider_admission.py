@@ -8,10 +8,14 @@ module-tree and executable hashes without mocking that security check.
 from contextlib import contextmanager
 import copy
 import dataclasses
+import errno
 import hashlib
+import json
 import os
 from pathlib import Path
 import pwd
+import select
+import signal
 import tempfile
 from types import MappingProxyType, SimpleNamespace
 import unittest
@@ -19,6 +23,7 @@ from unittest.mock import patch
 
 from control_plane import _provider_admission as admission
 from control_plane import isolated_runner as runner
+from control_plane import worker_provider as provider
 from control_plane.evaluation_broker import BrokerStore, EvaluationBroker
 from control_plane.execution_profile import executable_digest, trusted_code_digest, validate_execution_profile
 from control_plane.worker_provider import build_codex_argv, execute_provider_preflight
@@ -292,6 +297,290 @@ class ProviderAdmissionTests(unittest.TestCase):
                 "command_phase": 0, "argv_sha256": hashlib.sha256(admission._canonical(command)).hexdigest(),
                 "observation": observation, "boundary": boundary,
             }])
+
+    def diagnostic_payload(self, stdout, stderr):
+        state, error = {}, None
+        try:
+            provider.parse_codex_jsonl(stdout, _diagnostic_state=state)
+        except (ValueError, UnicodeError, TypeError, RecursionError) as caught:
+            error = caught
+        return provider.protocol_diagnostics(stdout, stderr, error, error_line=state.get("line"))
+
+    def diagnostic_capture(self, stdout, stderr, **flags):
+        admission.admit_provider_command(self.request, self.profile, self.git_argv(), b"")
+        argv = build_codex_argv(self.profile, self.request["checkout"],
+                               self.code / "schemas/worker-result.schema.json", request=self.request)
+        admission.admit_provider_command(self.request, self.profile, argv, self.request["prompt"].encode())
+        # These observations exercise result binding only; no child isolation
+        # claim is made by this unit fixture.
+        result = runner.BoundedProcessResult(
+            stdout=stdout, stderr=stderr, returncode=1, elapsed_seconds=0.01,
+            observation={"fixture": "unit-only"}, boundary={"fixture": "unit-only"},
+            **({"descendants_reaped": True, "timed_out": False, "output_overflow": False} | flags))
+        admission.record_boundary(result)
+        return argv, self.diagnostic_payload(stdout, stderr)
+
+    def diagnostic_bundle(self):
+        digest = hashlib.sha256(admission._canonical(self.request)).hexdigest()
+        return self.store.root / ".private" / ("provider-diagnostics-" + digest)
+
+    def assert_role_cannot_read_diagnostics(self, role, bundle):
+        reader, writer = os.pipe()
+        child = os.fork()
+        if child == 0:
+            try:
+                os.close(reader)
+                os.close(self.store.fd)
+                signal.alarm(5)
+                os.setgroups([])
+                os.setresgid(role.gid, role.gid, role.gid)
+                os.setresuid(role.uid, role.uid, role.uid)
+                for name in ("stdout.bin", "stderr.bin", "diagnostic.json"):
+                    try:
+                        descriptor = os.open(bundle / name, os.O_RDONLY)
+                    except PermissionError:
+                        continue
+                    os.close(descriptor)
+                    os._exit(2)
+                os.write(writer, b"denied")
+                os._exit(0)
+            except BaseException:
+                os._exit(3)
+        os.close(writer)
+        try:
+            ready, _, _ = select.select([reader], [], [], 6)
+            if not ready:
+                os.kill(child, signal.SIGKILL)
+            _, status = os.waitpid(child, 0)
+            self.assertEqual(os.waitstatus_to_exitcode(status), 0)
+            self.assertEqual(os.read(reader, 64), b"denied")
+        finally:
+            os.close(reader)
+
+    def test_private_diagnostics_bundle_binds_captured_result_and_denies_all_roles(self):
+        stdout = (b'{"type":"thread.started","thread_id":"PRIVATE-THREAD-SENTINEL"}\n'
+                  b'{"type":"turn.started"}\n'
+                  b'{"type":"turn.failed","error":{"message":"PRIVATE-MESSAGE-SENTINEL"}}\n')
+        stderr = b"PRIVATE-STDERR-SENTINEL\n"
+        self.register()
+        with self.scope(), admission.provider_dispatch(self.broker, self.request):
+            argv, diagnostic = self.diagnostic_capture(stdout, stderr)
+            self.assertIsNone(runner.retain_provider_diagnostics(self.request, self.profile, stdout, stderr, diagnostic))
+        bundle = self.diagnostic_bundle()
+        self.assertEqual({path.name for path in bundle.iterdir()}, {"stdout.bin", "stderr.bin", "diagnostic.json"})
+        self.assertEqual((bundle.stat().st_uid, bundle.stat().st_gid, bundle.stat().st_mode & 0o777), (0, 0, 0o500))
+        for path in bundle.iterdir():
+            info = path.lstat()
+            self.assertFalse(path.is_symlink())
+            self.assertEqual((info.st_uid, info.st_gid, info.st_mode & 0o777, info.st_nlink), (0, 0, 0o400, 1))
+        self.assertEqual((bundle / "stdout.bin").read_bytes(), stdout)
+        self.assertEqual((bundle / "stderr.bin").read_bytes(), stderr)
+        capture = {name: {"sha256": hashlib.sha256(data).hexdigest(), "bytes": len(data)}
+                   for name, data in (("stdout", stdout), ("stderr", stderr))}
+        expected = {
+            "schema_version": 1, "request_sha256": hashlib.sha256(admission._canonical(self.request)).hexdigest(),
+            "profile_sha256": self.profile.sha256,
+            "trusted_code_sha256": self.profile.paths["trusted_code_sha256"],
+            "argv_sha256": hashlib.sha256(admission._canonical(argv)).hexdigest(),
+            "command_phase": 1, "output_limit_bytes": self.request["limits"]["max_output_bytes"],
+            "capture": capture | {"output_overflow": False, "timed_out": False, "descendants_reaped": True,
+                                  "boundary_sha256": hashlib.sha256(admission._canonical({"fixture": "unit-only"})).hexdigest(),
+                                  "observation_sha256": hashlib.sha256(admission._canonical({"fixture": "unit-only"})).hexdigest()},
+            "retained": {name: value | {"truncated": False, "relative_path": name + ".bin"}
+                         for name, value in capture.items()},
+            "diagnostic": diagnostic,
+        }
+        raw = (bundle / "diagnostic.json").read_bytes()
+        self.assertEqual(json.loads(raw), expected)
+        for sentinel in (b"PRIVATE-THREAD-SENTINEL", b"PRIVATE-MESSAGE-SENTINEL", b"PRIVATE-STDERR-SENTINEL"):
+            self.assertNotIn(sentinel, raw)
+        self.assertEqual(list((self.store.root / "receipts").iterdir()), [])
+        self.assertEqual(list((self.store.root / "rejections").iterdir()), [])
+        runner.prepare_workspace_ownership(self.profile, self.workspace)
+        self.assertEqual((bundle.stat().st_uid, bundle.stat().st_gid, bundle.stat().st_mode & 0o777), (0, 0, 0o500))
+        for path in bundle.iterdir():
+            info = path.stat()
+            self.assertEqual((info.st_uid, info.st_gid, info.st_mode & 0o777), (0, 0, 0o400))
+        self.assertEqual((bundle / "diagnostic.json").read_bytes(), raw)
+        # Make earlier ancestors traversable so denial is provided by the
+        # root-private store/bundle, not this fixture's temporary directory.
+        self.root.chmod(0o755)
+        for name, role in self.profile.roles.items():
+            with self.subTest(role=name):
+                self.assert_role_cannot_read_diagnostics(role, bundle)
+
+    def test_private_diagnostics_truncates_combined_raw_bytes_but_keeps_original_capture(self):
+        stdout, stderr = b"a" * 3000, b"b" * 3000
+        self.register()
+        with self.scope(), admission.provider_dispatch(self.broker, self.request):
+            _, diagnostic = self.diagnostic_capture(stdout, stderr, output_overflow=True,
+                                                     timed_out=True, descendants_reaped=False)
+            runner.retain_provider_diagnostics(self.request, self.profile, stdout, stderr, diagnostic)
+        bundle = self.diagnostic_bundle()
+        retained = {name: (bundle / (name + ".bin")).read_bytes() for name in ("stdout", "stderr")}
+        self.assertEqual(retained, {"stdout": stdout, "stderr": stderr[:1096]})
+        self.assertEqual(sum(map(len, retained.values())), self.request["limits"]["max_output_bytes"])
+        record = json.loads((bundle / "diagnostic.json").read_bytes())
+        for name, original in (("stdout", stdout), ("stderr", stderr)):
+            self.assertEqual(record["capture"][name], {"sha256": hashlib.sha256(original).hexdigest(), "bytes": len(original)})
+            self.assertEqual(record["retained"][name], {
+                "sha256": hashlib.sha256(retained[name]).hexdigest(), "bytes": len(retained[name]),
+                "truncated": len(retained[name]) != len(original), "relative_path": name + ".bin"})
+        self.assertEqual({key: record["capture"][key] for key in ("output_overflow", "timed_out", "descendants_reaped")},
+                         {"output_overflow": True, "timed_out": True, "descendants_reaped": False})
+        self.assertEqual(record["diagnostic"], diagnostic)
+
+    def test_private_diagnostics_rejects_absent_stale_and_wrong_request_or_profile(self):
+        stdout, stderr = b"invalid provider stream\n", b"private stderr\n"
+        diagnostic = self.diagnostic_payload(stdout, stderr)
+        real_profile_check = admission._check_profile
+        with self.assertRaises(runner.IsolationError):
+            runner.retain_provider_diagnostics(self.request, self.profile, stdout, stderr, diagnostic)
+        self.register()
+        with self.scope():
+            with admission.provider_dispatch(self.broker, self.request):
+                self.diagnostic_capture(stdout, stderr)
+                with patch.object(admission._ACTIVE_DISPATCH, "deadline", 0):
+                    with self.assertRaises(runner.IsolationError):
+                        runner.retain_provider_diagnostics(self.request, self.profile, stdout, stderr, diagnostic)
+                changed = copy.deepcopy(self.request)
+                changed["prompt"] += " altered"
+                with self.assertRaises(runner.IsolationError):
+                    runner.retain_provider_diagnostics(changed, self.profile, stdout, stderr, diagnostic)
+                with patch.object(admission, "_check_profile", real_profile_check):
+                    with self.assertRaisesRegex(runner.IsolationError, "not the admitted frozen profile"):
+                        runner.retain_provider_diagnostics(self.request, dataclasses.replace(self.profile), stdout, stderr, diagnostic)
+            with self.assertRaises(runner.IsolationError):
+                runner.retain_provider_diagnostics(self.request, self.profile, stdout, stderr, diagnostic)
+        self.assertFalse(self.diagnostic_bundle().exists())
+
+    def test_private_diagnostics_rejects_preflight_git_and_unrecorded_provider_phases(self):
+        stdout, stderr = b"invalid provider stream\n", b"private stderr\n"
+        diagnostic = self.diagnostic_payload(stdout, stderr)
+        self.register()
+        with self.scope():
+            with admission.provider_dispatch(self.broker, None):
+                admission.admit_provider_command(None, self.profile, [self.tool.as_posix(), "--version"], b"")
+                with self.assertRaises(runner.IsolationError):
+                    runner.retain_provider_diagnostics(None, self.profile, stdout, stderr, diagnostic)
+            with admission.provider_dispatch(self.broker, self.request):
+                admission.admit_provider_command(self.request, self.profile, self.git_argv(), b"")
+                with self.assertRaises(runner.IsolationError):
+                    runner.retain_provider_diagnostics(self.request, self.profile, stdout, stderr, diagnostic)
+                argv = build_codex_argv(self.profile, self.request["checkout"],
+                                       self.code / "schemas/worker-result.schema.json", request=self.request)
+                admission.admit_provider_command(self.request, self.profile, argv, self.request["prompt"].encode())
+                with self.assertRaises(runner.IsolationError):
+                    runner.retain_provider_diagnostics(self.request, self.profile, stdout, stderr, diagnostic)
+                admission.record_boundary(runner.BoundedProcessResult(
+                    stdout=stdout, stderr=stderr, returncode=1, elapsed_seconds=0.01, descendants_reaped=True,
+                    observation={"fixture": "unit-only"}, boundary={"fixture": "unit-only"}))
+                admission.admit_provider_command(self.request, self.profile, self.git_argv(), b"")
+                with self.assertRaises(runner.IsolationError):
+                    runner.retain_provider_diagnostics(self.request, self.profile, stdout, stderr, diagnostic)
+        self.assertFalse(self.diagnostic_bundle().exists())
+
+    def test_private_diagnostics_rejects_changed_capture_and_sanitized_payload(self):
+        stdout, stderr = b'{"type":"unknown-private-event","private-field":"private-value"}\n', b"private stderr\n"
+        self.register()
+        with self.scope(), admission.provider_dispatch(self.broker, self.request):
+            _, diagnostic = self.diagnostic_capture(stdout, stderr)
+            for changed_stdout, changed_stderr in ((stdout + b" ", stderr), (stdout, stderr + b" ")):
+                changed_diagnostic = self.diagnostic_payload(changed_stdout, changed_stderr)
+                with self.assertRaises(runner.IsolationError):
+                    runner.retain_provider_diagnostics(self.request, self.profile, changed_stdout, changed_stderr, changed_diagnostic)
+            changed = copy.deepcopy(diagnostic)
+            changed["parse_status"] = "accepted"
+            with self.assertRaises(runner.IsolationError):
+                runner.retain_provider_diagnostics(self.request, self.profile, stdout, stderr, changed)
+            malicious = diagnostic | {"raw_message": "PRIVATE-RAW-MESSAGE"}
+            with self.assertRaises(runner.IsolationError):
+                runner.retain_provider_diagnostics(self.request, self.profile, stdout, stderr, malicious)
+            with patch.object(provider, "protocol_diagnostics", return_value=malicious):
+                with self.assertRaises(runner.IsolationError):
+                    runner.retain_provider_diagnostics(self.request, self.profile, stdout, stderr, malicious)
+        self.assertFalse(self.diagnostic_bundle().exists())
+
+    def test_private_diagnostics_replay_never_overwrites_existing_bundle(self):
+        stdout, stderr = b"invalid provider stream\n", b"private stderr\n"
+        self.register()
+        with self.scope(), admission.provider_dispatch(self.broker, self.request):
+            _, diagnostic = self.diagnostic_capture(stdout, stderr)
+            runner.retain_provider_diagnostics(self.request, self.profile, stdout, stderr, diagnostic)
+            bundle = self.diagnostic_bundle()
+            before = {path.name: (path.stat().st_ino, path.read_bytes()) for path in bundle.iterdir()}
+            with self.assertRaises((runner.IsolationError, FileExistsError)):
+                runner.retain_provider_diagnostics(self.request, self.profile, stdout, stderr, diagnostic)
+        with self.scope(), admission.provider_dispatch(self.broker, self.request):
+            _, diagnostic = self.diagnostic_capture(stdout, stderr)
+            with self.assertRaises((runner.IsolationError, FileExistsError)):
+                runner.retain_provider_diagnostics(self.request, self.profile, stdout, stderr, diagnostic)
+        self.assertEqual(before, {path.name: (path.stat().st_ino, path.read_bytes()) for path in bundle.iterdir()})
+
+    def test_private_diagnostics_write_fsync_and_rename_failures_never_publish_partial_bundle(self):
+        stdout, stderr = b"invalid provider stream\n", b"private stderr\n"
+        self.register()
+        real_write = os.write
+        writes = 0
+
+        def fail_after_stdout(descriptor, data):
+            nonlocal writes
+            writes += 1
+            self.assertFalse(self.diagnostic_bundle().exists())
+            if writes == 2:
+                raise OSError(errno.EIO, "injected diagnostic write failure")
+            return real_write(descriptor, data)
+
+        cases = (
+            ("partial-write", lambda: patch.object(os, "write", side_effect=fail_after_stdout)),
+            ("file-fsync", lambda: patch.object(os, "fsync", side_effect=OSError(errno.EIO, "injected diagnostic fsync failure"))),
+            ("rename", lambda: patch.object(admission._DIAGNOSTIC_LIBC, "renameat2",
+                                             side_effect=OSError(errno.EIO, "injected diagnostic rename failure"))),
+        )
+        for name, inject in cases:
+            with self.subTest(failure=name), self.scope(), admission.provider_dispatch(self.broker, self.request):
+                _, diagnostic = self.diagnostic_capture(stdout, stderr)
+                with inject(), self.assertRaises(OSError) as caught:
+                    runner.retain_provider_diagnostics(self.request, self.profile, stdout, stderr, diagnostic)
+                self.assertEqual(caught.exception.errno, errno.EIO)
+                self.assertFalse(self.diagnostic_bundle().exists())
+                with self.assertRaises(runner.IsolationError):
+                    runner.retain_provider_diagnostics(self.request, self.profile, stdout, stderr, diagnostic)
+        self.assertEqual(writes, 2)
+        private = self.store.root / ".private"
+        self.assertEqual((private.stat().st_uid, private.stat().st_mode & 0o777), (0, 0o700))
+        self.assertEqual(list((self.store.root / "receipts").iterdir()), [])
+
+    def test_private_diagnostics_parent_sync_failure_reports_uncertain_durability_without_retry(self):
+        stdout, stderr = b"invalid provider stream\n", b"private stderr\n"
+        self.register()
+        parent = (self.store.root / ".private").stat()
+        real_sync = os.fsync
+        publication_syncs = 0
+
+        def fail_publication_sync(descriptor):
+            nonlocal publication_syncs
+            info = os.fstat(descriptor)
+            if (info.st_dev, info.st_ino) == (parent.st_dev, parent.st_ino):
+                publication_syncs += 1
+                raise OSError(errno.EIO, "injected diagnostic parent sync failure")
+            return real_sync(descriptor)
+
+        with self.scope(), admission.provider_dispatch(self.broker, self.request):
+            _, diagnostic = self.diagnostic_capture(stdout, stderr)
+            with patch.object(os, "fsync", side_effect=fail_publication_sync), self.assertRaises(OSError) as caught:
+                runner.retain_provider_diagnostics(self.request, self.profile, stdout, stderr, diagnostic)
+            self.assertEqual(caught.exception.errno, errno.EIO)
+            bundle = self.diagnostic_bundle()
+            self.assertEqual({path.name for path in bundle.iterdir()}, {"stdout.bin", "stderr.bin", "diagnostic.json"})
+            self.assertEqual((bundle / "stdout.bin").read_bytes(), stdout)
+            self.assertEqual((bundle / "stderr.bin").read_bytes(), stderr)
+            self.assertEqual(json.loads((bundle / "diagnostic.json").read_bytes())["diagnostic"], diagnostic)
+            before = {path.name: (path.stat().st_ino, path.read_bytes()) for path in bundle.iterdir()}
+            with self.assertRaises(runner.IsolationError):
+                runner.retain_provider_diagnostics(self.request, self.profile, stdout, stderr, diagnostic)
+            self.assertEqual(before, {path.name: (path.stat().st_ino, path.read_bytes()) for path in bundle.iterdir()})
+        self.assertEqual(publication_syncs, 1)
 
     def _real_profile_authority(self):
         root = Path(admission.__file__).resolve().parent

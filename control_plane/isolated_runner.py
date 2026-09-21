@@ -660,7 +660,16 @@ def prepare_workspace_ownership(profile, workspace):
             os.chown(path, *current_owner)
             if item.name in immutable:
                 private = relative.parts[:2] == (".broker-receipts", ".private")
-                os.chmod(path, (0o700 if path.is_dir() else 0o400) if private else (0o755 if path.is_dir() else 0o444))
+                # Private diagnostic bundles stay sealed across root ownership
+                # preparation; the private parent and staging directories stay
+                # writable only by the bootstrap authority.
+                sealed_diagnostic = (private and len(relative.parts) == 3
+                    and relative.parts[2].startswith("provider-diagnostics-")
+                    and len(relative.parts[2]) == len("provider-diagnostics-") + 64
+                    and all(character in "0123456789abcdef"
+                            for character in relative.parts[2][len("provider-diagnostics-"):]))
+                private_mode = (0o500 if sealed_diagnostic else 0o700) if path.is_dir() else 0o400
+                os.chmod(path, private_mode if private else (0o755 if path.is_dir() else 0o444))
     # Read-only worker group ownership is inherited during graph construction;
     # the dropped graph receives neither supplementary groups nor CAP_CHOWN.
     # State remains owner-only traversable. Publication groups gain read/execute.
@@ -953,5 +962,5 @@ def finish_worker_checkout(request, profile):
 
 
 # Freeze installed production function identities after module definition.
-from ._provider_admission import assert_active_provider_boundary, freeze_runner_functions
+from ._provider_admission import assert_active_provider_boundary, freeze_runner_functions, retain_provider_diagnostics
 freeze_runner_functions()

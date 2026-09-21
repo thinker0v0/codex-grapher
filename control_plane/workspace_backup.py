@@ -31,7 +31,7 @@ VERSION = 1
 RUNTIME_ENTRIES = frozenset({
     ".workflow.lock", ".bootstrap.lock", ".launcher.sock", ".worker-control.sock",
     "binding.json.lock", "graph.sqlite.owner.lock",
-    "state/.workflow.lock", "state/binding.json.lock", "state/graph.sqlite.owner.lock",
+    "state/.workflow.lock", "state/.worker-control.sock", "state/binding.json.lock", "state/graph.sqlite.owner.lock",
     ".broker-receipts/.lock", ".broker-receipts/.private",
 })
 HEX40 = re.compile(r"^[a-f0-9]{40}$")

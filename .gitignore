@@ -26,3 +26,6 @@ config/project-runtime.json
 
 # Local role/probe workspaces are not public source.
 evidence/portable-workers/
+
+# Private provider diagnostics and broker capabilities never enter source.
+**/.broker-receipts/.private/

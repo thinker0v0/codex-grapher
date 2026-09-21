@@ -6,17 +6,20 @@ substituting a runner, not a claim of protection against compromised root Python
 from __future__ import annotations
 
 from contextlib import contextmanager
+import ctypes
 import dataclasses
 import hashlib
 import json
 import os
 from pathlib import Path
+import secrets
 import time
 
 _ACTIVE_BOOTSTRAP = None
 _ACTIVE_DISPATCH = None
 _PRODUCTION_FUNCTIONS = None
 _PRODUCTION_HELPERS = None
+_DIAGNOSTIC_LIBC = ctypes.CDLL(None, use_errno=True)
 
 
 def _canonical(value):
@@ -48,6 +51,8 @@ class _Dispatch:
     deadline: float
     stage: int = 0
     command_sha256: str | None = None
+    provider_capture: dict | None = None
+    diagnostics_attempted: bool = False
     active: bool = True
 
 
@@ -57,14 +62,16 @@ def freeze_runner_functions():
     if _PRODUCTION_FUNCTIONS is not None:
         _deny("runner identity may only be frozen once")
     from . import isolated_runner as runner
-    names = ("run_provider_process", "run_role_process", "_sandbox", "_bind", "_mount", "_syscall",
+    names = ("run_provider_process", "retain_provider_diagnostics", "run_role_process", "_sandbox", "_bind", "_mount", "_syscall",
              "_drop_role", "_restrict_syscalls", "_observation", "_validate_launch_authority")
     _PRODUCTION_FUNCTIONS = {name: (getattr(runner, name), getattr(runner, name).__code__) for name in names}
     from . import _boundary_attestation as boundary, worker_provider as provider
     helpers = [(boundary, name) for name, value in vars(boundary).items()
                if callable(value) and getattr(value, "__module__", None) == boundary.__name__]
     helpers.extend((provider, name) for name in ("build_codex_argv", "_schema_path", "_assert_boundary", "_run",
-                                                "execute_worker", "execute_provider_preflight"))
+                                                "execute_worker", "execute_provider_preflight", "parse_codex_jsonl",
+                                                "protocol_diagnostics", "_retain_diagnostics", "_diagnostic_kind",
+                                                "_diagnostic_fields", "_diagnostic_label", "_diagnostic_event"))
     _PRODUCTION_HELPERS = [(module, name, getattr(module, name), getattr(module, name).__code__)
                            for module, name in helpers]
 
@@ -198,8 +205,113 @@ def record_boundary(result):
         if result.boundary is None or result.observation is None:
             _deny("actual child boundary was not admitted before exec")
         current = _ACTIVE_DISPATCH
+        if current.request is not None and current.stage == 2:
+            from .isolated_runner import BoundedProcessResult
+            if (type(result) is not BoundedProcessResult or current.provider_capture is not None
+                    or type(result.stdout) is not bytes or type(result.stderr) is not bytes
+                    or any(type(getattr(result, name)) is not bool
+                           for name in ("output_overflow", "timed_out", "descendants_reaped"))):
+                _deny("provider process capture is invalid or already bound")
+            current.provider_capture = {
+                "stdout": _stream_identity(result.stdout), "stderr": _stream_identity(result.stderr),
+                "output_overflow": result.output_overflow, "timed_out": result.timed_out,
+                "descendants_reaped": result.descendants_reaped,
+                "boundary_sha256": hashlib.sha256(_canonical(result.boundary)).hexdigest(),
+                "observation_sha256": hashlib.sha256(_canonical(result.observation)).hexdigest(),
+            }
         current.bootstrap.observations.append({
             "action": "provider-preflight" if current.request is None else "worker-launch",
             "request_sha256": None if current.request is None else hashlib.sha256(current.request).hexdigest(),
             "command_phase": current.stage - 1, "argv_sha256": current.command_sha256,
             "observation": result.observation, "boundary": result.boundary})
+
+
+def _stream_identity(data):
+    return {"sha256": hashlib.sha256(data).hexdigest(), "bytes": len(data)}
+
+
+def _seal_provider_diagnostics(store, name, files):
+    """Publish one complete private bundle without replacing any existing entry.
+
+    An interrupted staging directory is deliberately left private. It is never
+    interpreted as a completed diagnostic bundle or included in backup/public
+    evidence. The final name appears only after every file has been fsynced.
+    """
+    store._writer()
+    store._pinned()
+    parent = store._dir(".private")
+    staging = ".provider-diagnostics-staging-" + secrets.token_hex(16)
+    try:
+        os.mkdir(staging, mode=0o700, dir_fd=parent)
+        fd = store._dir(staging, parent)
+        try:
+            for filename, data in files.items():
+                store._new(fd, filename, data, 0o400)
+            os.fchmod(fd, 0o500)
+            os.fsync(fd)
+        finally:
+            os.close(fd)
+        store._pinned()
+        rename = getattr(_DIAGNOSTIC_LIBC, "renameat2", None)
+        if rename is None:
+            _deny("exclusive private diagnostic publication is unavailable")
+        rename.argtypes = [ctypes.c_int, ctypes.c_char_p, ctypes.c_int, ctypes.c_char_p, ctypes.c_uint]
+        rename.restype = ctypes.c_int
+        if rename(parent, os.fsencode(staging), parent, os.fsencode(name), 1) != 0:  # RENAME_NOREPLACE
+            error = ctypes.get_errno()
+            raise OSError(error, "private provider diagnostic publication failed")
+        os.fsync(parent)
+    finally:
+        os.close(parent)
+
+
+def retain_provider_diagnostics(request, profile, stdout, stderr, diagnostics):
+    """Root-only capture for the currently admitted provider command, never RPC.
+
+    Raw bytes stay below the backup-excluded private broker directory. Neither
+    this capability nor its record is exposed through a worker receipt or wire.
+    """
+    assert_active_provider_boundary(request, profile)
+    current = _ACTIVE_DISPATCH
+    if (request is None or current.stage != 2 or current.provider_capture is None
+            or current.diagnostics_attempted):
+        _deny("provider diagnostics lack a fresh completed provider phase")
+    if type(stdout) is not bytes or type(stderr) is not bytes:
+        _deny("provider diagnostic streams must be captured bytes")
+    capture = current.provider_capture
+    if _stream_identity(stdout) != capture["stdout"] or _stream_identity(stderr) != capture["stderr"]:
+        _deny("provider diagnostics differ from the captured process output")
+    from .worker_provider import MAX_DIAGNOSTIC_BYTES, MAX_OUTPUT_BYTES, parse_codex_jsonl, protocol_diagnostics
+    limit = request["limits"]["max_output_bytes"]
+    if type(limit) is not int or not 1 <= limit <= MAX_OUTPUT_BYTES or len(stdout) + len(stderr) > MAX_OUTPUT_BYTES:
+        _deny("provider diagnostics exceed the admitted capture bound")
+    if type(diagnostics) is not dict or len(_canonical(diagnostics)) > MAX_DIAGNOSTIC_BYTES:
+        _deny("provider diagnostics have invalid shape or size")
+    # Recompute the finite structural summary rather than accept caller strings
+    # or exception text in a supposedly sanitized record. Parsing rules do not
+    # change, and this second bounded parse performs no provider execution.
+    state, error = {}, None
+    try:
+        parse_codex_jsonl(stdout, _diagnostic_state=state)
+    except (ValueError, UnicodeError, TypeError, RecursionError) as problem:
+        error = problem
+    expected = protocol_diagnostics(stdout, stderr, error, error_line=state.get("line"))
+    if _canonical(diagnostics) != _canonical(expected):
+        _deny("provider diagnostics do not match the bounded structural summary")
+    retained_stdout = stdout[:limit]
+    retained_stderr = stderr[:max(0, limit - len(retained_stdout))]
+    request_sha256 = hashlib.sha256(current.request).hexdigest()
+    metadata = {
+        "schema_version": 1, "request_sha256": request_sha256,
+        "profile_sha256": profile.sha256, "trusted_code_sha256": current.bootstrap.code_sha256,
+        "argv_sha256": current.command_sha256, "command_phase": 1, "output_limit_bytes": limit,
+        "capture": capture,
+        "retained": {name: {**_stream_identity(data), "truncated": len(data) != capture[name]["bytes"],
+                            "relative_path": name + ".bin"}
+                     for name, data in (("stdout", retained_stdout), ("stderr", retained_stderr))},
+        "diagnostic": expected,
+    }
+    current.diagnostics_attempted = True
+    _seal_provider_diagnostics(current.bootstrap.broker.store, "provider-diagnostics-" + request_sha256,
+                               {"stdout.bin": retained_stdout, "stderr.bin": retained_stderr,
+                                "diagnostic.json": _canonical(metadata)})
