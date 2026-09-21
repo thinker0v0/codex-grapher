@@ -1,0 +1,244 @@
+{
+  "schema_version": 1,
+  "record_id": "opensource.portable-workers.representative-cases.public.v1",
+  "recorded_at": "2026-09-21T14:13:47.180100+00:00",
+  "source_record_sha256": "58376d33f021022f86acde0ebc4b6a892922ec7ed65ab1ff9cf364c8c12709cd",
+  "scope": "Controlled seeded regressions in actual upstream snapshots; not upstream bugs or model performance benchmark. Curator-only: do not expose seed answers or upstream Git history to worker.",
+  "cases": [
+    {
+      "id": "more-itertools-chunked-strict-seeded-v1",
+      "project_id": "more-itertools",
+      "task_id": "restore-chunked-strict-remainder",
+      "idempotency_key": "more-itertools-chunked-strict-seeded-v1",
+      "repo": "more-itertools/more-itertools",
+      "license": "MIT",
+      "license_path": "LICENSE",
+      "allowed_paths": [
+        "more_itertools/more.py"
+      ],
+      "source_path": "more_itertools/more.py",
+      "test_paths": [
+        "tests/test_more.py"
+      ],
+      "objective": "Restore chunked(iterable, n, strict=True) so incomplete final chunks raise ValueError before being yielded while complete chunks, normal mode, empty input and invalid size semantics remain compatible.",
+      "seed": {
+        "old": "                if len(chunk) != n:\n",
+        "new": "                if len(chunk) > n:\n",
+        "expected_count": 1,
+        "original_sha256": "3050959731820b722f19c5e49d75d6ad551298bbdd58da5400890d0896227315",
+        "seeded_sha256": "edf2e73801233e6c3b5244db91abc0572d133b54be49320d8b2c9958c53634aa",
+        "applied_to_source": false,
+        "upstream_bug": false
+      },
+      "required_python_source": "import pathlib, sys\nroot = pathlib.Path.cwd().resolve()\nsys.path.insert(0, str(root))\nimport more_itertools\nassert pathlib.Path(more_itertools.__file__).resolve() == root / 'more_itertools/__init__.py'\nimport unittest\nsuite = unittest.defaultTestLoader.loadTestsFromName('tests.test_more.ChunkedTests')\nresult = unittest.TextTestRunner(verbosity=2).run(suite)\nraise SystemExit(not result.wasSuccessful())\n",
+      "independent_evaluator_python_source": "import pathlib, sys\nroot = pathlib.Path.cwd().resolve()\nsys.path.insert(0, str(root))\nimport more_itertools\nassert pathlib.Path(more_itertools.__file__).resolve() == root / 'more_itertools/__init__.py'\nfrom more_itertools import chunked\ncases = 0\nfor n in range(1, 8):\n    for length in range(31):\n        data = list(range(length))\n        expected = [data[i:i+n] for i in range(0, length, n)]\n        assert list(chunked(iter(data), n)) == expected, (n, length, 'non-strict')\n        yielded = []\n        error = None\n        try:\n            for value in chunked(iter(data), n, strict=True):\n                yielded.append(value)\n        except ValueError as exc:\n            error = exc\n        if length % n:\n            assert error is not None, (n, length, 'missing ValueError')\n            assert yielded == expected[:-1], (n, length, 'partial chunk escaped')\n        else:\n            assert error is None and yielded == expected, (n, length, 'divisible')\n        cases += 1\nassert list(chunked(iter([]), 3, strict=True)) == []\nassert list(chunked('abc', None)) == [['a', 'b', 'c']]\nassert list(chunked('abc', 0)) == []\nfor n in (-1, -5):\n    try:\n        list(chunked('abc', n))\n    except ValueError:\n        pass\n    else:\n        raise AssertionError(('negative n accepted', n))\ntry:\n    list(chunked('abc', None, strict=True))\nexcept ValueError:\n    pass\nelse:\n    raise AssertionError('None n accepted in strict mode')\nprint('PASS independent chunked acceptance:', cases, 'size/length pairs + 6 boundary checks')\n",
+      "runtime_dependencies": [],
+      "validation_dependencies": [],
+      "source_import_guard": "more_itertools.__file__ must be <candidate>/more_itertools/__init__.py; library source itself is stdlib only.",
+      "commit": "1da45ae4b61a832ed080f08a8833784aad0a9534",
+      "commit_datetime": "2026-09-18T14:49:04-05:00",
+      "source_url": "https://github.com/more-itertools/more-itertools/tree/1da45ae4b61a832ed080f08a8833784aad0a9534",
+      "license_url": "https://github.com/more-itertools/more-itertools/blob/1da45ae4b61a832ed080f08a8833784aad0a9534/LICENSE",
+      "files": {
+        "LICENSE": {
+          "sha256": "09f1c8c9e941af3e584d59641ea9b87d83c0cb0fd007eb5ef391a7e2643c1a46",
+          "bytes": 1053,
+          "raw_url": "https://raw.githubusercontent.com/more-itertools/more-itertools/1da45ae4b61a832ed080f08a8833784aad0a9534/LICENSE"
+        },
+        "more_itertools/more.py": {
+          "sha256": "3050959731820b722f19c5e49d75d6ad551298bbdd58da5400890d0896227315",
+          "bytes": 174856,
+          "raw_url": "https://raw.githubusercontent.com/more-itertools/more-itertools/1da45ae4b61a832ed080f08a8833784aad0a9534/more_itertools/more.py"
+        },
+        "tests/test_more.py": {
+          "sha256": "7bd5628b80335bc385ecb77bc41d6f84ebabf680b1d720af4ee457bac6f14c60",
+          "bytes": 253813,
+          "raw_url": "https://raw.githubusercontent.com/more-itertools/more-itertools/1da45ae4b61a832ed080f08a8833784aad0a9534/tests/test_more.py"
+        },
+        "pyproject.toml": {
+          "sha256": "cf131f8e1bffabdfdfc9f610ae08da753ed111c460188b5c221697bc0f526b4a",
+          "bytes": 1572,
+          "raw_url": "https://raw.githubusercontent.com/more-itertools/more-itertools/1da45ae4b61a832ed080f08a8833784aad0a9534/pyproject.toml"
+        }
+      },
+      "upstream_bug_claim": false,
+      "scope_limits": {
+        "allowed_paths": [
+          "more_itertools/more.py"
+        ],
+        "forbidden": "All other paths, including tests, pyproject.toml, dependency/environment metadata, .git configuration, trusted evaluator and external source repository."
+      }
+    },
+    {
+      "id": "humanize-ordinal-teens-seeded-v1",
+      "project_id": "humanize",
+      "task_id": "restore-ordinal-teen-suffixes",
+      "idempotency_key": "humanize-ordinal-teens-seeded-v1",
+      "repo": "python-humanize/humanize",
+      "license": "MIT",
+      "license_path": "LICENCE",
+      "allowed_paths": [
+        "src/humanize/number.py"
+      ],
+      "source_path": "src/humanize/number.py",
+      "test_paths": [
+        "tests/test_number.py"
+      ],
+      "objective": "Restore English ordinal rendering for integers and integer strings ending in 11, 12 or 13, including 111/112/113; preserve normal suffixes, both gender selectors, nonnumeric values and non-finite compatibility.",
+      "seed": {
+        "old": "    if value % 100 in (11, 12, 13):  # special case\n",
+        "new": "    if value % 10 in (11, 12, 13):  # special case\n",
+        "expected_count": 1,
+        "original_sha256": "28af9e79b0dab50032ead7372913f6a22cf1e535fb6495281cb695e5f0ef4629",
+        "seeded_sha256": "7eca18d8141288e5c27edc8e2d9a8ba1d2d1860bd820c03a0a43216b416df7f8",
+        "applied_to_source": false,
+        "upstream_bug": false
+      },
+      "required_python_source": "import pathlib, sys\nroot = pathlib.Path.cwd().resolve()\nimport os\nos.environ['PYTEST_DISABLE_PLUGIN_AUTOLOAD'] = '1'\nsys.path.insert(0, str(root / 'src'))\nimport humanize, humanize.number\nassert pathlib.Path(humanize.number.__file__).resolve() == root / 'src/humanize/number.py'\nimport pytest\nraise SystemExit(pytest.main(['-c', '/dev/null', '-p', 'no:cacheprovider', '-q', 'tests/test_number.py']))\n",
+      "independent_evaluator_python_source": "import pathlib, sys\nroot = pathlib.Path.cwd().resolve()\nimport math\nsys.path.insert(0, str(root / 'src'))\nimport humanize, humanize.number\nassert pathlib.Path(humanize.number.__file__).resolve() == root / 'src/humanize/number.py'\nhumanize.deactivate()\nunits = ('th', 'st', 'nd', 'rd', 'th', 'th', 'th', 'th', 'th', 'th')\ncases = 0\nfor value in range(501):\n    last_two = int(str(value)[-2:])\n    suffix = 'th' if 10 < last_two < 14 else units[int(str(value)[-1])]\n    expected = str(value) + suffix\n    for gender in ('male', 'female'):\n        assert humanize.ordinal(value, gender=gender) == expected, (value, gender)\n        assert humanize.ordinal(str(value), gender=gender) == expected, ('string', value, gender)\n        cases += 2\nfor value, expected in [(None, 'None'), ('abc', 'abc'), (math.nan, 'NaN'), (math.inf, '+Inf'), (-math.inf, '-Inf')]:\n    assert humanize.ordinal(value) == expected\nassert humanize.ordinal(111.9) == '111th'\nprint('PASS independent ordinal acceptance:', cases, 'ordinal cases + 6 compatibility cases')\n",
+      "runtime_dependencies": [
+        "humanize==4.10.0 (distribution metadata only; candidate src wins all source imports)"
+      ],
+      "validation_dependencies": [
+        "pytest==9.0.2"
+      ],
+      "source_import_guard": "humanize.number.__file__ must equal <candidate>/src/humanize/number.py; installed humanize supplies importlib.metadata.version only.",
+      "selection_note": "Historical official 4.10.0 release chosen intentionally: current HEAD needs generated, untracked _version.py. Not a current-latest or upstream defect claim.",
+      "commit": "2a141c7f5b51e09c8c4d6e00903101932aef4d11",
+      "commit_datetime": "2024-07-02T00:09:32-06:00",
+      "source_url": "https://github.com/python-humanize/humanize/tree/2a141c7f5b51e09c8c4d6e00903101932aef4d11",
+      "license_url": "https://github.com/python-humanize/humanize/blob/2a141c7f5b51e09c8c4d6e00903101932aef4d11/LICENCE",
+      "files": {
+        "LICENCE": {
+          "sha256": "8ba6c18112a431400ad3c743f70670079b302545d98884fc2f28a91c383a0380",
+          "bytes": 1078,
+          "raw_url": "https://raw.githubusercontent.com/python-humanize/humanize/2a141c7f5b51e09c8c4d6e00903101932aef4d11/LICENCE"
+        },
+        "src/humanize/number.py": {
+          "sha256": "28af9e79b0dab50032ead7372913f6a22cf1e535fb6495281cb695e5f0ef4629",
+          "bytes": 16241,
+          "raw_url": "https://raw.githubusercontent.com/python-humanize/humanize/2a141c7f5b51e09c8c4d6e00903101932aef4d11/src/humanize/number.py"
+        },
+        "tests/test_number.py": {
+          "sha256": "80e33c200de1b3f80ca8d7503cba8582a5c1fa8a1b15d2fc5d9ca779a2799189",
+          "bytes": 9011,
+          "raw_url": "https://raw.githubusercontent.com/python-humanize/humanize/2a141c7f5b51e09c8c4d6e00903101932aef4d11/tests/test_number.py"
+        },
+        "pyproject.toml": {
+          "sha256": "72914db6155789586dd22929ce0e4d1de95a95263ceaec53fe9808a8b04d6bf2",
+          "bytes": 3116,
+          "raw_url": "https://raw.githubusercontent.com/python-humanize/humanize/2a141c7f5b51e09c8c4d6e00903101932aef4d11/pyproject.toml"
+        }
+      },
+      "upstream_bug_claim": false,
+      "scope_limits": {
+        "allowed_paths": [
+          "src/humanize/number.py"
+        ],
+        "forbidden": "All other paths, including tests, pyproject.toml, dependency/environment metadata, .git configuration, trusted evaluator and external source repository."
+      }
+    },
+    {
+      "id": "itsdangerous-integer-encoding-seeded-v1",
+      "project_id": "itsdangerous",
+      "task_id": "restore-minimal-integer-encoding",
+      "idempotency_key": "itsdangerous-integer-encoding-seeded-v1",
+      "repo": "pallets/itsdangerous",
+      "license": "BSD-3-Clause",
+      "license_path": "LICENSE.txt",
+      "allowed_paths": [
+        "src/itsdangerous/encoding.py"
+      ],
+      "source_path": "src/itsdangerous/encoding.py",
+      "test_paths": [
+        "tests/test_itsdangerous/test_encoding.py"
+      ],
+      "objective": "In this disposable seeded snapshot, int_to_bytes no longer returns the shortest big-endian representation of an unsigned 64-bit integer. Restore that behavior, retaining internal and trailing zero bytes, the empty representation of zero, inverse decoding, and rejection outside the unsigned 64-bit range. Keep all other encoding helpers working. Change only src/itsdangerous/encoding.py; do not modify tests, metadata, or dependencies.",
+      "seed": {
+        "path": "src/itsdangerous/encoding.py",
+        "old": "    return _int_to_bytes(num).lstrip(b\"\\x00\")\n",
+        "new": "    return _int_to_bytes(num).rstrip(b\"\\x00\")\n",
+        "expected_count": 1,
+        "kind": "deliberately seeded regression; not an upstream defect",
+        "applied": false,
+        "original_sha256": "c304f3e6aff7ccb71a01dba793afef4a84adc06a9859edf4ed997f53ceda4453",
+        "seeded_sha256": "9a7537cb6082eadee43fb494cc9279170120a24c7a32502b103f551fae203a0e",
+        "applied_to_source": false,
+        "upstream_bug": false
+      },
+      "required_python_source": "import os, sys\nfrom pathlib import Path\nroot = Path.cwd().resolve()\nos.environ['PYTEST_DISABLE_PLUGIN_AUTOLOAD'] = '1'\nsys.path.insert(0, str(root / 'src'))\nimport itsdangerous.encoding\nassert Path(itsdangerous.encoding.__file__).resolve() == root / 'src/itsdangerous/encoding.py'\nimport pytest\nraise SystemExit(pytest.main(['-c', '/dev/null', '-p', 'no:cacheprovider', '-q', 'tests/test_itsdangerous/test_encoding.py']))\n",
+      "independent_evaluator_python_source": "import base64\nimport importlib\nimport json\nimport random\nimport struct\nimport sys\nfrom pathlib import Path\n\nroot = Path.cwd().resolve()\nsys.path.insert(0, str(root / \"src\"))\nencoding = importlib.import_module(\"itsdangerous.encoding\")\nassert Path(encoding.__file__).resolve() == root / \"src/itsdangerous/encoding.py\"\n\nvalues = [0, 1, 255, 256, 257, 65535, 65536, (1 << 32) - 1, 1 << 32, 1 << 63, (1 << 64) - 1]\nrng = random.Random(20260921)\nvalues.extend(rng.randrange(1 << 64) for _ in range(128))\nfor value in values:\n    expected = value.to_bytes((value.bit_length() + 7) // 8, \"big\")\n    actual = encoding.int_to_bytes(value)\n    assert actual == expected, (value, actual, expected)\n    assert isinstance(actual, bytes)\n    assert not actual or actual[0] != 0\n    assert encoding.bytes_to_int(actual) == value\n    assert encoding.bytes_to_int(expected.rjust(8, b\"\\x00\")) == value\nfor value in (-1, 1 << 64):\n    try:\n        encoding.int_to_bytes(value)\n    except struct.error:\n        pass\n    else:\n        raise AssertionError((\"unsigned 64-bit overflow accepted\", value))\ntry:\n    encoding.bytes_to_int(b\"\\x00\" * 9)\nexcept struct.error:\n    pass\nelse:\n    raise AssertionError(\"oversized integer encoding accepted\")\n\nsamples = [bytes(range(length)) for length in range(257)]\nsamples.extend([b\"\\xff\\xff\", b\"\\xfb\\xff\", b\"\\x00\" * 7, \"mañana\".encode(), \"無限\".encode()])\nfor raw in samples:\n    expected = base64.urlsafe_b64encode(raw).rstrip(b\"=\")\n    encoded = encoding.base64_encode(raw)\n    assert encoded == expected\n    assert b\"=\" not in encoded and b\"+\" not in encoded and b\"/\" not in encoded\n    assert encoding.base64_decode(encoded) == raw\n    assert encoding.base64_decode(encoded.decode(\"ascii\")) == raw\nassert encoding.want_bytes(\"mañana\") == \"mañana\".encode(\"utf-8\")\nprint(json.dumps({\"status\": \"PASS\", \"integer_cases\": len(values), \"base64_cases\": len(samples), \"negative_cases\": 3}, sort_keys=True))\n",
+      "runtime_dependencies": [],
+      "validation_dependencies": [
+        "pytest==9.0.2"
+      ],
+      "source_import_guard": "itsdangerous.encoding.__file__ must equal <candidate>/src/itsdangerous/encoding.py.",
+      "commit": "672971d66a2ef9f85151e53283113f33d642dabd",
+      "commit_datetime": "2025-06-14T13:35:42-07:00",
+      "source_url": "https://github.com/pallets/itsdangerous/tree/672971d66a2ef9f85151e53283113f33d642dabd",
+      "license_url": "https://github.com/pallets/itsdangerous/blob/672971d66a2ef9f85151e53283113f33d642dabd/LICENSE.txt",
+      "files": {
+        "LICENSE.txt": {
+          "sha256": "63af09891b6be8ad1a4252ed43af0f4efba7fc948e228367bed7f3c5ae0b09d7",
+          "url": "https://github.com/pallets/itsdangerous/blob/672971d66a2ef9f85151e53283113f33d642dabd/LICENSE.txt",
+          "raw_url": "https://raw.githubusercontent.com/pallets/itsdangerous/672971d66a2ef9f85151e53283113f33d642dabd/LICENSE.txt",
+          "bytes": 1475
+        },
+        "src/itsdangerous/encoding.py": {
+          "sha256": "c304f3e6aff7ccb71a01dba793afef4a84adc06a9859edf4ed997f53ceda4453",
+          "url": "https://github.com/pallets/itsdangerous/blob/672971d66a2ef9f85151e53283113f33d642dabd/src/itsdangerous/encoding.py",
+          "raw_url": "https://raw.githubusercontent.com/pallets/itsdangerous/672971d66a2ef9f85151e53283113f33d642dabd/src/itsdangerous/encoding.py",
+          "bytes": 1409
+        },
+        "tests/test_itsdangerous/test_encoding.py": {
+          "sha256": "af71dbee0825fc8ae947b6c789b05f2331afe60efae2aee5145727446385c3f0",
+          "url": "https://github.com/pallets/itsdangerous/blob/672971d66a2ef9f85151e53283113f33d642dabd/tests/test_itsdangerous/test_encoding.py",
+          "raw_url": "https://raw.githubusercontent.com/pallets/itsdangerous/672971d66a2ef9f85151e53283113f33d642dabd/tests/test_itsdangerous/test_encoding.py",
+          "bytes": 1004
+        },
+        "pyproject.toml": {
+          "sha256": "201c20759a79bd30b8fcb38ce5539ed1dc28ff2b39d4f9742a6a54d696033a79",
+          "url": "https://github.com/pallets/itsdangerous/blob/672971d66a2ef9f85151e53283113f33d642dabd/pyproject.toml",
+          "raw_url": "https://raw.githubusercontent.com/pallets/itsdangerous/672971d66a2ef9f85151e53283113f33d642dabd/pyproject.toml",
+          "bytes": 4444
+        }
+      },
+      "upstream_bug_claim": false,
+      "scope_limits": {
+        "allowed_paths": [
+          "src/itsdangerous/encoding.py"
+        ],
+        "forbidden": "All other paths, including tests, pyproject.toml, dependency/environment metadata, .git configuration, trusted evaluator and external source repository."
+      }
+    }
+  ],
+  "planned_limits": {
+    "worker_invocations": 1,
+    "worker_timeout_seconds": 300,
+    "required_tests_timeout_seconds": 60,
+    "independent_evaluator_timeout_seconds": 60,
+    "stdout_stderr_combined_bytes": 262144
+  },
+  "execution_rules": [
+    "Freeze commands/evaluator code outside worker write scope before launch.",
+    "Worker receives only objective and allowed paths; do not expose hidden source replacement/original-source answers as task hints.",
+    "Snapshot full authentic upstream tree, apply exact seed in disposable preparation, then record separate seeded baseline commit.",
+    "The task base_sha is the local seeded baseline commit; upstream SHA is provenance, never substitute one for the other.",
+    "Original repository, upstream remote, test files, build configuration and dependency lock remain unchanged by worker.",
+    "Avoid carrying original upstream Git history/remotes into the disposable seeded snapshot; retain provenance in trusted operator metadata.",
+    "Use OS-separated evaluator for adversarial worker code. Trusted check code alone is not a process/credential boundary.",
+    "No push, PR, release, upstream issue, external message, credential copy, deployment or provider call belongs to design/preparation checks.",
+    "Provider execution later needs the already approved explicit worker profile and invocation/time limits; tests require no network."
+  ],
+  "preparation_proof_sequence": [
+    "Verify upstream commit, license hash, source/test hashes and pristine command results.",
+    "Provision isolated dependencies before freezing environment; keep downloaded package hashes and pip freeze.",
+    "Apply the single exact seed in a disposable tree, verify occurrence count and seeded source hash; preserve all other files byte-for-byte.",
+    "Record local seed commit, original upstream SHA, seed metadata digest, source-tree digest, frozen contract/evaluator digest and environment digest.",
+    "Run BOTH frozen required and independent commands on seeded baseline; require nonzero assertion-based failures matching the documented regression (not import/setup failures).",
+    "Only then launch at most one explicitly configured real worker per task; record version/model/command/prompt hash/start-end/result and sealed artifact.",
+    "Re-run fixed commands on immutable worker artifact under separate evaluator; verify allowed path and exact external tests; integrate only through grapher gates.",
+    "Check accepted generation, status, idempotent recover, rollback/recover and next-task input SHA as directed by frozen parent acceptance contract.",
+    "Report task outcomes separately and retain failures; fixture pass does not establish general-purpose coding quality or production security."
+  ]
+}

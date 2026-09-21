@@ -187,6 +187,21 @@ include tests/test_task_controller.py
 include tests/test_verified_lifecycle.py
 include tests/test_workspace_guard.py
 
+include docs/cycles/20260921-portable-workers/DECISIONS.md
+include docs/cycles/20260921-portable-workers/HANDOFF.md
+include docs/cycles/20260921-portable-workers/PROBLEM.md
+include docs/cycles/20260921-portable-workers/PROJECT.md
+include docs/cycles/20260921-portable-workers/RESEARCH.md
+include docs/cycles/20260921-portable-workers/RUBRIC.md
+include docs/cycles/20260921-portable-workers/SCAFFOLDING.md
+include docs/cycles/20260921-portable-workers/SOLUTION.md
+include docs/cycles/20260921-portable-workers/representative-NOTICES.txt
+include docs/cycles/20260921-portable-workers/representative-task-cases.json
+
+include docs/cycles/20260921-portable-workers/sqlite-provenance.json
+
+include docs/cycles/20260921-portable-workers/vm-feasibility.json
+
 # Defense in depth: never distribute local runtime state or private key files.
 prune .git
 prune .venv

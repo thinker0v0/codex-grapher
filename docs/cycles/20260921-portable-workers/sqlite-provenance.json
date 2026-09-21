@@ -1,0 +1,280 @@
+{
+  "schema_version": 1,
+  "record_id": "opensource.portable-workers.sqlite-provenance.v1",
+  "project_id": "opensource",
+  "task_id": "20260921-portable-workers-sqlite-provenance",
+  "idempotency_key": "public-sqlite-provenance-3.45.1-1ubuntu2.8-and-3.53.4-v1",
+  "owner": "project-maintainers",
+  "status": "VERIFIED_SOURCE_AND_DISTRIBUTION_PROVENANCE",
+  "classification": "public-technical-evidence",
+  "source_date": "2026-09-21",
+  "retrieval_date": "2026-09-21",
+  "effective_date": "2026-09-21",
+  "review_date": "2026-09-28",
+  "expiry": "Exact artifact identities are immutable; reassess the runtime verdict on any loaded-library change and refresh current-release status on any new upstream release.",
+  "scope": "Sanitized SQLite source and distribution provenance only; not a product implementation, runtime acceptance or release score.",
+  "trust_basis": [
+    "Official SQLite HTTPS source artifacts checked against published archive and source digests.",
+    "Ubuntu signed archive release verified with the Ubuntu archive keyring; indices, source and binary artifacts hash-linked to that release."
+  ],
+  "advisory": {
+    "url": "https://sqlite.org/wal.html#the_wal_reset_bug",
+    "defect": "WAL-reset checkpoint/write data race",
+    "fixed_upstream_release_floor": "3.51.3",
+    "documented_older_branch_backports": [
+      "3.44.6",
+      "3.50.7"
+    ],
+    "applicability": "WAL databases with multiple connections competing in writes and checkpoints.",
+    "ordinary_test_success_proves_fix": false,
+    "observed_database_corruption": false,
+    "corruption_reproduction_performed": false
+  },
+  "upstream_fix": {
+    "initial_fossil_checkin": "053bd3930f827156fd67ea4546a36227cffbb6f8bada3b5d1a7cf5f1867ac624",
+    "initial_date_utc": "2026-03-03T17:34:01Z",
+    "trunk_fossil_checkin": "7168988acbec2d8d51106a263e553f8942b8b23d983dbbe5028e0f9be68cbb83",
+    "trunk_date_utc": "2026-03-03T19:43:19.771Z",
+    "fossil_url": "https://sqlite.org/src/info/7168988acb",
+    "official_mirror_git_sha": "72a14a575e72b44d6401107039f387f944d7b647",
+    "official_mirror_url": "https://github.com/sqlite/sqlite/commit/72a14a575e72b44d6401107039f387f944d7b647",
+    "function": "walCheckpoint",
+    "source_file": "src/wal.c",
+    "condition": "After acquiring exclusive WAL_READ_LOCK(0), compare the live WAL-index aSalt to the checkpoint snapshot aSalt and only checkpoint when unchanged.",
+    "guard_scope": [
+      "pInfo->nBackfillAttempted = mxSafeFrame",
+      "WAL sync and page copying",
+      "AtomicStore(&pInfo->nBackfill, mxSafeFrame)"
+    ],
+    "regression_test": "test/walrestart.test"
+  },
+  "known_unpatched_binary_attestation": {
+    "patch_verdict": "UNPATCHED_FOR_SQLITE_WAL_RESET",
+    "distribution": "Ubuntu",
+    "distribution_series": "noble",
+    "source_package": "sqlite3",
+    "binary_package": "libsqlite3-0",
+    "package_version": "3.45.1-1ubuntu2.8",
+    "architecture": "amd64",
+    "runtime_sqlite_version": "3.45.1",
+    "runtime_sqlite_source_id": "2024-01-30 16:01:20 e876e51a0ed5c5b3126f52e532044363a014bc594cfefa87ffb5b82257ccalt1",
+    "shared_library_sha256": "85265a9d4afca6f4b325ceb078b669c754fb881abed4cafe91ccebe9d625d975",
+    "actual_process_mapping_observed_at": "2026-09-21T14:07:32.752347+00:00",
+    "actual_process_mapping_matches_package_library": true,
+    "source_wal_member": "sqlite3-3.45.1/src/wal.c",
+    "source_wal_sha256": "d4a104b5f3cb807e026a9dbcdb77519358b06b66f76cb6b6ef70e3793379dd62",
+    "distribution_patch_count": 17,
+    "distribution_patches_changing_wal_source": [],
+    "distribution_patch_series": [
+      {
+        "name": "10-520466-libsqlite3-depends-on-libdl.patch",
+        "sha256": "bffa00e02c3dbf76e787b101050cc07fa25520edcf4b3a0281011b8cd1f35cde"
+      },
+      {
+        "name": "10-520478-squash-bad-deps.patch",
+        "sha256": "b74ebd7e77fdb598b4a5c9a1de3632faba365f1287eb3ade8e5b6ab09b064fae"
+      },
+      {
+        "name": "20-hurd-locking-style.patch",
+        "sha256": "aa504ebf17aea477e1aa69b4b10e18f1d176026797dc02436b594fae4edef201"
+      },
+      {
+        "name": "30-cross.patch",
+        "sha256": "1957eae97b43dc12568cfedbce3ab378d1ed0426ebe88bbab79d4a029c2300b2"
+      },
+      {
+        "name": "10-665363-disable-malloc-usable-size.patch",
+        "sha256": "ccc57dbaa8ada6737531c92a91bf3c6e1ed4b6b0c652d16ad3326eb7b077f771"
+      },
+      {
+        "name": "31-increase_SQLITE_MAX_DEFAULT_PAGE_SIZE_to_32k.patch",
+        "sha256": "27af1c41614efba22f9eb1f1b4f46d49e3ac37a6087668a186ff2bc1bc4dcb75"
+      },
+      {
+        "name": "32-dynamic_link.patch",
+        "sha256": "cff84aae33fd5b9f6b59a41430e0fcbe2fd195d1112f43e0c305a30eec33b4c6"
+      },
+      {
+        "name": "02-use-packaged-lempar.c.patch",
+        "sha256": "9d51e267719f48454627860cf0529928b6711c053e3b930344d897e95a0810fa"
+      },
+      {
+        "name": "40-amalgamation_configure.patch",
+        "sha256": "70e1e07ecd7acf48e3d1ef9ec82e6351ca9ca8b2d3a29a29b547380473ea345d"
+      },
+      {
+        "name": "CVE-2025-29087_3277.patch",
+        "sha256": "7fd73cac324afd342359d16028c0ceb9a2c1c5a8f1b8d4a2ce1dbb94bf557ca4"
+      },
+      {
+        "name": "CVE-2025-29088.patch",
+        "sha256": "5fbb1b1a2900011791b6cf41370dbf06cb37159ba0626ea9f0808c971ef416a6"
+      },
+      {
+        "name": "CVE-2025-6965.patch",
+        "sha256": "4a665e0a5643e5c6ea4eee815088638b1dc1d6ce9db8ab240289c1484982a73a"
+      },
+      {
+        "name": "CVE-2025-7709.patch",
+        "sha256": "60a604ef79affefc01788364db00ebe08c51a5e9e3e91c2b37a0a0d19ef10e30"
+      },
+      {
+        "name": "CVE-2026-11822_4.patch",
+        "sha256": "6b2102c98c838ffeeae6d9e5c4b8664425d3232050269f3cbbed2c33a628a4ca"
+      },
+      {
+        "name": "CVE-2026-50812.patch",
+        "sha256": "a43c36c5f34ded71c1ef20c21e0533e81d24a4c9ed236de96b9a670eefe0f564"
+      },
+      {
+        "name": "CVE-2026-50813.patch",
+        "sha256": "c4a2b2dca8aefd8786df11b8071ee457469e94f4d2429f405a0786096d7365fb"
+      },
+      {
+        "name": "CVE-2026-39113.patch",
+        "sha256": "bd929f8e2febc6dd41d2b975bc6fe741c1813c4623773a88646602cd35686846"
+      }
+    ],
+    "source_findings": [
+      "The canonical walCheckpoint source performs backfill bookkeeping without the upstream generation-salt guard.",
+      "None of the 17 distribution patches changes src/wal.c.",
+      "The distribution build recipe uses canonical sources with --disable-amalgamation."
+    ],
+    "archive_signature": {
+      "verifier": "gpgv",
+      "verifier_exit_code": 0,
+      "result": "VALID",
+      "signature_date_utc": "2026-09-21T12:46:15Z",
+      "signer_fingerprint": "F6ECB3762474EDA9D21B7022871920D1991BC93C",
+      "signer_label": "Ubuntu Archive Automatic Signing Key (2018)",
+      "trust_anchor": "Ubuntu archive keyring",
+      "trust_anchor_sha256": "80a36b0a6de2f69f49d2df75ef473ccde121e9e190b9ea01d20a4f63778d5c31"
+    },
+    "artifacts": {
+      "signed_archive_release": {
+        "url": "https://security.ubuntu.com/ubuntu/dists/noble-security/InRelease",
+        "sha256": "be421214ec526291691b0e600de0146a29ccad0af4aeeb089f5fd90c8e61ee31",
+        "size": 126127,
+        "retrieved_at": "2026-09-21T14:02:27.682218+00:00"
+      },
+      "signed_source_index": {
+        "url": "https://security.ubuntu.com/ubuntu/dists/noble-security/main/source/Sources.xz",
+        "sha256": "efb56206752de301d4b7be1e10b168d52a125df4776a83dd3953821039986470",
+        "size": 284008,
+        "retrieved_at": "2026-09-21T14:02:29.036343+00:00"
+      },
+      "signed_binary_index": {
+        "url": "https://security.ubuntu.com/ubuntu/dists/noble-security/main/binary-amd64/Packages.xz",
+        "sha256": "102ccfa5eb1c892efe6f6fb0b172dbf61a507e54f86e4b799752e204c33316c5",
+        "size": 1020220,
+        "retrieved_at": "2026-09-21T14:02:30.749665+00:00"
+      },
+      "source_descriptor": {
+        "url": "https://archive.ubuntu.com/ubuntu/pool/main/s/sqlite3/sqlite3_3.45.1-1ubuntu2.8.dsc",
+        "sha256": "f3c0a904d2d2386e81b39774f2a2f00f92c42adb2f141ff59cc6a347c4487a69",
+        "size": 2601,
+        "retrieved_at": "2026-09-21T14:01:22.085054+00:00"
+      },
+      "original_source_archive": {
+        "url": "https://archive.ubuntu.com/ubuntu/pool/main/s/sqlite3/sqlite3_3.45.1.orig.tar.xz",
+        "sha256": "e32e817f7b4166a301f60b14a711871bfab7d35c1d7e29b585dfc479ae150aa4",
+        "size": 8257884,
+        "retrieved_at": "2026-09-21T14:02:04.564682+00:00"
+      },
+      "distribution_patch_archive": {
+        "url": "https://archive.ubuntu.com/ubuntu/pool/main/s/sqlite3/sqlite3_3.45.1-1ubuntu2.8.debian.tar.xz",
+        "sha256": "d543bf91c6f14ccd52ebe44d6ef3b360196b2596e0a7ca86089aef5fc52f5ec0",
+        "size": 37512,
+        "retrieved_at": "2026-09-21T14:01:24.339740+00:00"
+      },
+      "distribution_binary_package": {
+        "url": "https://archive.ubuntu.com/ubuntu/pool/main/s/sqlite3/libsqlite3-0_3.45.1-1ubuntu2.8_amd64.deb",
+        "sha256": "b1190bb72359f5fcc47406aa46065eaf4f1ca208085c51224a52b04bedc0b4bb",
+        "size": 701602,
+        "retrieved_at": "2026-09-21T14:02:07.004796+00:00"
+      }
+    },
+    "chain": [
+      "Ubuntu archive trust anchor validates signed_archive_release.",
+      "signed_archive_release binds signed_source_index and signed_binary_index by SHA-256 and byte length.",
+      "signed_source_index binds source_descriptor, original_source_archive and distribution_patch_archive.",
+      "signed_binary_index binds distribution_binary_package.",
+      "The extracted distribution library matches the library actually mapped by Python byte-for-byte.",
+      "Canonical WAL source plus the complete distribution patch series establish that the fix is absent."
+    ],
+    "result_checks": {
+      "signed_Sources_sha256": true,
+      "signed_Packages_sha256": true,
+      "source_index_distro.dsc_sha256": true,
+      "source_index_distro.orig.tar.xz_sha256": true,
+      "source_index_distro.debian.tar.xz_sha256": true,
+      "binary_package_index_sha256": true,
+      "installed_library_matches_ubuntu_package": true,
+      "pre_fix_unconditional_nBackfill_assignment": true,
+      "upstream_fix_salt_check_absent": true
+    },
+    "verification_result": "ALL_9_CHECKS_PASSED",
+    "association_limit": "Source-to-binary association trusts Ubuntu signed publication; an independent reproducible Ubuntu package build was not performed.",
+    "scope_limit": "This attestation applies to the exact package, architecture, source and binary hashes above. Other distributions and unknown backports require their own evidence."
+  },
+  "pinned_fixed_source": {
+    "version": "3.53.4",
+    "release_date": "2026-07-24",
+    "release_url": "https://sqlite.org/releaselog/3_53_4.html",
+    "archive_url": "https://sqlite.org/2026/sqlite-autoconf-3530400.tar.gz",
+    "archive_published_digest_url": "https://sqlite.org/download.html",
+    "source_id": "2026-07-24 19:02:57 bf7c7f30031888f4e796e429ab3978879485813aaca6f641c7b33e4e09459bcc",
+    "archive": {
+      "bytes": 3283177,
+      "sha256_calculated": "0e9483900e92cd5de8fd48d16bf9200145a61f7fd5be542a5ac81d8a9516eb9c",
+      "sha3_256_published": "454e45f61c6bd75b7420e7190732dea03ce6639c63ada47bbc592f67fc340338",
+      "sha3_256_calculated": "454e45f61c6bd75b7420e7190732dea03ce6639c63ada47bbc592f67fc340338",
+      "sha3_256_matches_published": true
+    },
+    "sqlite3_c": {
+      "bytes": 9515341,
+      "sha256_calculated": "b1dd5d74ec7f29055a6684fa06fb3c2f6821c87dd38f9a458dfd2e8a1db28189",
+      "sha3_256_published": "67f423e9ebbbdc473cbc4772c872ee6b89f31fde4ed0279a5c25d5f65c043a16",
+      "sha3_256_calculated": "67f423e9ebbbdc473cbc4772c872ee6b89f31fde4ed0279a5c25d5f65c043a16",
+      "sha3_256_matches_published": true
+    },
+    "result_checks": {
+      "archive_retrieved_https_official_host": true,
+      "version_is_3_53_4": true,
+      "source_id_matches_published": true,
+      "source_sha3_matches_published": true,
+      "archive_sha3_matches_published": true,
+      "archive_size_matches_published": true
+    },
+    "verification_result": "ALL_6_RELEASE_CHECKS_PASSED",
+    "runtime_build_status": "NOT_BUILT_BY_THIS_RESEARCH",
+    "runtime_support_status": "UNPROVEN_UNTIL_BUILT_LOADED_AND_TESTED",
+    "runtime_identity_requirement": "Measure source ID, compile options and the actual loaded library hash in the same Python process that opens graph databases."
+  },
+  "maintenance_contract": {
+    "wal_mode": "Require a fixed source/runtime identity or a reviewed exact distribution backport attestation; fail closed for UNPATCHED or UNPROVEN.",
+    "portable_avoidance_mode": "DELETE with synchronous=EXTRA, readback checks and a single OS-locked graph owner is avoidance of this WAL defect, not a patched-runtime attestation.",
+    "existing_wal": "Require quiescent explicit maintenance with a verified fixed runtime and backup; never delete WAL/SHM sidecars or silently change the mode.",
+    "pragma_source_url": "https://sqlite.org/pragma.html#pragma_synchronous"
+  },
+  "evidence_packet_digests": {
+    "distribution_verification_sha256": "6a491d357bcffc37842aa1c385fea8ee3bacd0f20d49b8f3d1801bc130b6b7ff",
+    "installed_runtime_observation_sha256": "eb0f6472db3d71ade0e5594894f3a196603c4abf0a2d4febf996552692b6a8d2",
+    "upstream_fix_verification_sha256": "2c52da195a72c2da1ab0cb771c12d804fe5c342efba8bec38df2f18570ecdac1",
+    "fixed_release_verification_sha256": "68118395dd15c5b0f360c540736e71831fe6eee8a6c32e6a675009d015235c43",
+    "research_report_sha256": "2fe54f558e0a06690cb227efd1c1507c0203e3856dfbc0672bea3c92b994da3b"
+  },
+  "omitted_from_public_record": [
+    "Hostnames, account names, UID/GID values, home directories and all absolute host filesystem paths.",
+    "Process addresses, local command argv/path outputs and unrelated environment metadata.",
+    "Raw upstream source files, downloaded archives, distribution binaries and source patches.",
+    "Raw command output, source packet locations, agent identities and conversation details.",
+    "Any credentials, authentication configuration or vendor account information."
+  ],
+  "limits": [
+    "No host package installation, production database access or production service changes occurred during this research.",
+    "A source or binary hash does not prove all SQLite defects absent.",
+    "This record awards no product, isolation, recovery or release pass.",
+    "Signed archive URLs are mutable; future downloaded bytes must be checked against the recorded snapshot hashes or assessed as a new snapshot."
+  ]
+}

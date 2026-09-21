@@ -1,0 +1,137 @@
+{
+  "schema_version": 1,
+  "record_id": "VM-FEASIBILITY-20260921",
+  "scope": "Disposable guest environment feasibility; no product acceptance or production claim",
+  "status": "BOOT_PREREQUISITES_VERIFIED_REBOOT_ACCEPTANCE_UNPROVEN",
+  "retrieved_utc": "2026-09-21T14:20:46.719809+00:00",
+  "reference_product_git_sha": "df9e0c31ffdb7e045a268b6b03b16ce33b623a49",
+  "product_source_executed": false,
+  "image": {
+    "distribution": "Debian13 genericcloud amd64",
+    "build": "20260914-2601",
+    "url": "https://cloud.debian.org/images/cloud/trixie/20260914-2601/debian-13-genericcloud-amd64-20260914-2601.qcow2",
+    "checksum_url": "https://cloud.debian.org/images/cloud/trixie/20260914-2601/SHA512SUMS",
+    "bytes": 340983808,
+    "sha512": "95e110dfcdbd0ed8a82a75ed9579802f9950cabf51a810dcc6388e81bc778188713878b9f28d583a0ea602fbf48b35996ae9ad37f584166d8fbd6489df248f53",
+    "downloaded_bytes_verified": true,
+    "signature_verified": false
+  },
+  "emulator": {
+    "qemu_version": "8.2.2 (Ubuntu package1:8.2.2+ds-0ubuntu1.18)",
+    "accelerator": "tcg,thread=single",
+    "machine": "pc,smm=off",
+    "cpu": "max",
+    "vcpus": 1,
+    "guest_memory_mib": 1024,
+    "firmware": "SeaBIOS1.16.3",
+    "management": "ephemeral loopback-only SSH; fresh fixture identity",
+    "host_package_installation": false,
+    "host_account_mutation": false,
+    "host_service_mutation": false,
+    "private_credentials_in_evidence": false,
+    "capability_masks_zero": true,
+    "no_new_privileges": true,
+    "seccomp_enabled": true,
+    "inherit_environment": "allowlist only",
+    "process_security_evidence_scope": "Observed on the earlier BIOS-stalled launch using the same privilege, seccomp and environment configuration; not product-role isolation evidence"
+  },
+  "tool_sha256": {
+    "usr/bin/qemu-system-x86_64": "8a35ccba41582fc6c38b9df85fc9e35fa1d42f414d2d7d8090ee9b2f5e7c0854",
+    "usr/bin/qemu-img": "634320b91165669917123e8e79cce1c4d00cee0a4aa4d662d7c0a8186479b3fb",
+    "usr/bin/genisoimage": "9bacc5951ca0767701cfd8e6b47537f199977e51a6e943f4edfdcf9d639d99d2",
+    "usr/share/seabios/bios-256k.bin": "1a9ea4f17bcfb27bda5728e2c21d9fa074cf7947b9b4910bb28213a735c96735",
+    "usr/lib/x86_64-linux-gnu/qemu/accel-tcg-x86_64.so": "bbaaf2a24df5546d87a4973e4c02e93eea4347b015db029ef6749e1a00fcf013"
+  },
+  "observations": {
+    "first_ssh_ready_seconds": 138.394,
+    "kernel": "6.12.107+deb13-cloud-amd64",
+    "pid1": "systemd",
+    "python": "3.13.5",
+    "git": "2.47.3",
+    "openssl": "3.5.7",
+    "systemd": "257.13-1~deb13u1",
+    "system_state": "running",
+    "guest_only_git_install_exit": 0,
+    "guest_reboot_command_exit": 0,
+    "first_boot_id": "45db3aae-4ddf-4bd7-b5d8-2bf4e07c4810",
+    "second_boot_id": null,
+    "boot_id_change": "UNPROVEN",
+    "serial_linux_boot_sequences": 2,
+    "serial_kernel_restart_markers": 1,
+    "reboot_readiness": "SSH handshake hit8s timeout before harness retried; second kernel/systemd/ssh startup present"
+  },
+  "bounds": {
+    "max_concurrent_guests": 1,
+    "max_boot_seconds": 180,
+    "max_pilot_seconds": 900,
+    "pilot_elapsed_seconds": 753.067,
+    "configured_guest_memory_is_not_total_emulator_rss": true,
+    "observed_emulator_rss_bytes": 2062581760,
+    "remaining_host_available_memory_bytes_during_peak_observation": 3690987520
+  },
+  "cleanup": {
+    "qemu_process_stopped": true,
+    "no_guest_running": true,
+    "guest_poweroff_completed": false,
+    "stop_method": "Harness terminated only its disposable QEMU process after SSH probe exception",
+    "task_local_cache_and_overlay_retained_for_followup": true,
+    "runtime_in_public_source": false
+  },
+  "followup": [
+    "Retry individual SSH handshake timeouts until the overall boot deadline, while checking QEMU liveness.",
+    "Reuse tested pc,smm=off/cpu=max profile and explicit local module/firmware paths.",
+    "Set and measure an explicit TCG translation-cache bound; guest RAM setting alone is not total process memory.",
+    "Capture changed boot_id and guest service/application recovery under the frozen product acceptance suite."
+  ],
+  "not_proven": [
+    "Changed boot ID after reboot",
+    "Application service restart",
+    "OS-separated product roles and denial matrix",
+    "Promotion/rollback after VM loss",
+    "Consistent backup and restore",
+    "Physical host or storage power-loss behavior"
+  ],
+  "private_evidence_sha256": {
+    "pilot_result": "1f6a14a702380f7811ee451fdabcb4123894e401441272a7d944b1ffeaafefb1",
+    "serial_log": "65aad92319cfcfc9f7285db07ff86e1657be2852eaedf5c1565f89e3c8c34470",
+    "qemu_security_observation": "4b40eb63b40c593ba53c884e480de392140edb3300605222722e7fa0c09e4eb0"
+  },
+  "tool_package_sources": [
+    {
+      "name": "qemu-system-common",
+      "version": "1:8.2.2+ds-0ubuntu1.18",
+      "url": "https://archive.ubuntu.com/ubuntu/pool/main/q/qemu/qemu-system-common_8.2.2+ds-0ubuntu1.18_amd64.deb",
+      "sha256": "0a0b744f31e87d72dd0465436b8dfbb1ef9f574ecd0d5a2e9dd8c5cb7d0fef1f"
+    },
+    {
+      "name": "qemu-system-data",
+      "version": "1:8.2.2+ds-0ubuntu1.18",
+      "url": "https://archive.ubuntu.com/ubuntu/pool/main/q/qemu/qemu-system-data_8.2.2+ds-0ubuntu1.18_all.deb",
+      "sha256": "a14b88d864859bd61c8a3274971da4ecb7da6cec15be6c265d0d411f783d5f2e"
+    },
+    {
+      "name": "seabios",
+      "version": "1.16.3-2",
+      "url": "https://archive.ubuntu.com/ubuntu/pool/main/s/seabios/seabios_1.16.3-2_all.deb",
+      "sha256": "cac4e59a66c834d19cae751c22ab3a0391c22f78010fd11aa2e3fe630e6bc0e0"
+    },
+    {
+      "name": "qemu-system-x86",
+      "version": "1:8.2.2+ds-0ubuntu1.18",
+      "url": "https://archive.ubuntu.com/ubuntu/pool/main/q/qemu/qemu-system-x86_8.2.2+ds-0ubuntu1.18_amd64.deb",
+      "sha256": "14602e262627adac030329d2cecfee5f6c0938b34566ff2ea2d4c9a9eb02430d"
+    },
+    {
+      "name": "qemu-utils",
+      "version": "1:8.2.2+ds-0ubuntu1.18",
+      "url": "https://archive.ubuntu.com/ubuntu/pool/main/q/qemu/qemu-utils_8.2.2+ds-0ubuntu1.18_amd64.deb",
+      "sha256": "10695e57937d8a1d0ec6d017a6770d02353ec0c9500e4a36928230b2d39026c5"
+    },
+    {
+      "name": "genisoimage",
+      "version": "9:1.1.11-3.5",
+      "url": "https://archive.ubuntu.com/ubuntu/pool/main/c/cdrkit/genisoimage_1.1.11-3.5_amd64.deb",
+      "sha256": "cfa9f63d8208a3e1b2c228357707f607e2b402334262d6f591abc44a429bb217"
+    }
+  ]
+}
