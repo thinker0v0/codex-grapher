@@ -24,6 +24,10 @@ MAX_ARRAY_ITEMS = 256
 MAX_TEXT_LENGTH = 65536
 MAX_PATH_LENGTH = 4096
 MAX_JSON_DEPTH = 64
+# Required-test run IDs append "-attempt-N-required" and must fit the existing
+# sealed protocol's 192-character identifier. Every supported attempt is 1..3.
+MAX_TASK_IDENTIFIER_LENGTH = 173
+MAX_CHECK_IDENTIFIER_LENGTH = 192
 DEFAULT_LIMITS = MappingProxyType({
     "worker_invocations": 1,
     "worker_timeout_seconds": 900,
@@ -191,9 +195,9 @@ def _text(value: Any, name: str, maximum: int = MAX_TEXT_LENGTH) -> None:
     _json_value(value)
 
 
-def _identifier(value: Any, name: str) -> None:
-    if type(value) is not str or not _IDENTIFIER.fullmatch(value):
-        _fail(f"{name} must be a safe identifier of at most 200 characters")
+def _identifier(value: Any, name: str, maximum: int = 200) -> None:
+    if type(value) is not str or not _IDENTIFIER.fullmatch(value) or len(value) > maximum:
+        _fail(f"{name} must be a safe identifier of at most {maximum} characters")
 
 
 def _array(value: Any, name: str) -> None:
@@ -233,7 +237,11 @@ def validate_task(value: Any) -> dict[str, Any]:
     if type(value["schema_version"]) is not int or value["schema_version"] != 1:
         _fail("task schema_version must be integer 1")
     for name in ("project_id", "task_id", "idempotency_key"):
-        _identifier(value[name], name)
+        _identifier(value[name], name, MAX_TASK_IDENTIFIER_LENGTH if name == "task_id" else 200)
+    # The unchanged integrator embeds this exact value as an intermediate
+    # component of refs/ai-ops/candidates/<task_id>/<candidate_sha>.
+    if ".." in value["task_id"] or value["task_id"].endswith(".lock"):
+        _fail("task_id cannot contain '..' or end with '.lock' in its candidate Git ref")
     if type(value["base_sha"]) is not str or not _COMMIT.fullmatch(value["base_sha"]):
         _fail("base_sha must be an exact lowercase 40-hex commit")
     _text(value["objective"], "objective")
@@ -270,7 +278,7 @@ def validate_checks(value: Any) -> dict[str, Any]:
     ids: set[str] = set()
     for check in value["checks"]:
         _object(check, {"id", "argv"}, set(), "check")
-        _identifier(check["id"], "check.id")
+        _identifier(check["id"], "check.id", MAX_CHECK_IDENTIFIER_LENGTH)
         if check["id"] in ids:
             _fail("check IDs must be unique")
         ids.add(check["id"])

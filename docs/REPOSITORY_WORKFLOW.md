@@ -26,6 +26,20 @@ already be provisioned by your operator. The CLI does not install packages,
 create accounts, change services or silently select `trusted-local` when isolation
 is unavailable. See [the isolated setup](#isolated-linux-setup) below.
 
+An isolated workspace's canonical absolute path must fit in **80 filesystem-encoded
+bytes**, including all parent directories. Multibyte characters consume more than
+one byte. This leaves room for both Unix control sockets regardless of task-ID
+length. `init` checks the limit before creating workspace state; existing isolated
+workspaces are checked before bootstrap effects. Choose a shorter protected path
+if needed. This socket limit does not apply to `trusted-local`.
+
+Task IDs support up to 173 ASCII identifier characters, leaving room for derived
+execution IDs within the sealed protocol. Check IDs support up to 192 characters;
+project IDs and idempotency keys support up to 200. Task IDs cannot contain `..`
+or end in `.lock`, because they become components of candidate Git refs. The
+task/check loaders reject unsupported values before creating a workspace or
+reserving a worker invocation.
+
 For Codex CLI 0.155.1, the isolated runner enforces the Linux boundary and selects
 `--sandbox danger-full-access` inside it. Codex's nested `workspace-write`
 sandbox cannot create its namespaces under this runner's syscall restrictions.

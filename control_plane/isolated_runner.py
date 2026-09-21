@@ -442,8 +442,8 @@ def run_provider_process(request, profile, argv, stdin):
     if auth_file.is_file():
         mounts.append((auth_file, auth_file, False))
     environment = {"HOME": str(auth_home), "CODEX_HOME": str(auth_home / ".codex")}
-    if request:
-        control = checkout.parent.parent.parent / "state" / (request["attempt_id"] + ".control.sock")
+    if request and profile.mode == "isolated-linux":
+        _launcher_path, control = workspace_socket_paths(checkout.parent.parent.parent)
         if control.exists():
             metadata = control.lstat()
             if not stat.S_ISSOCK(metadata.st_mode) or metadata.st_uid != profile.roles["graph"].uid:
@@ -678,6 +678,18 @@ def prepare_workspace_ownership(profile, workspace):
     store = BrokerStore(workspace, require_root=True); store.close()
 
 
+def workspace_socket_paths(workspace):
+    """Derive the two serialized workspace endpoints before filesystem effects."""
+    root = Path(workspace)
+    if not root.is_absolute() or ".." in root.parts or "\x00" in str(root):
+        raise IsolationError("ISOLATION_UNAVAILABLE: socket workspace must be an absolute canonical path")
+    launcher = root / ".launcher.sock"
+    control = root / "state" / ".worker-control.sock"
+    if any(len(os.fsencode(path)) > 107 for path in (launcher, control)):
+        raise IsolationError("ISOLATION_UNAVAILABLE: isolated workspace path exceeds the 80 encoded-byte Unix socket limit")
+    return launcher, control
+
+
 def bootstrap_operation(profile, workspace, operation, *, stop_after=None, barrier=None):
     """Explicit root CLI entry; creates a finite post-drop authenticated broker."""
     global _GRAPH_PIDFD
@@ -685,13 +697,13 @@ def bootstrap_operation(profile, workspace, operation, *, stop_after=None, barri
     if operation not in {"run", "recover", "rollback", "status"}:
         raise IsolationError("unknown graph operation")
     workspace = Path(workspace).resolve(strict=True)
+    socket_path, _control_path = workspace_socket_paths(workspace)
     trusted = Path(profile.paths["trusted_code_root"]).resolve(strict=True)
     if trusted not in Path(__file__).resolve().parents:
         raise IsolationError("bootstrap code was imported from outside the pinned trusted install")
     from .evaluation_broker import EvaluationBroker
     metadata = json.loads((workspace / "workflow.json").read_bytes())
     broker = EvaluationBroker(workspace, profile)
-    socket_path = workspace / ".launcher.sock"
     lock_path = workspace / ".bootstrap.lock"
     lock_fd = os.open(lock_path, os.O_RDWR | os.O_CREAT | os.O_NOFOLLOW, 0o600)
     lock_stat = os.fstat(lock_fd)

@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import importlib.util
+import contextlib
 import json
 import errno
 import os
@@ -78,6 +79,37 @@ class LauncherProtocolTests(unittest.TestCase):
         value.update(changes)
         value["request_sha256"] = digest(value)
         return value
+
+    def test_workspace_socket_paths_count_encoded_bytes_and_preserve_boundary(self):
+        launcher, control = runner.workspace_socket_paths(Path("/" + "w" * 79))
+        self.assertEqual(len(os.fsencode(control)), 107)
+        self.assertEqual(control.name, ".worker-control.sock")
+        self.assertEqual(launcher.name, ".launcher.sock")
+        for root in (Path("/" + "w" * 80), Path("/" + "é" * 40)):
+            with self.subTest(root=str(root)), self.assertRaisesRegex(runner.IsolationError, "80 encoded-byte"):
+                runner.workspace_socket_paths(root)
+        for root in (Path("relative"), Path("/tmp/../bad")):
+            with self.subTest(root=str(root)), self.assertRaises(runner.IsolationError):
+                runner.workspace_socket_paths(root)
+
+    def test_scoped_control_refuses_existing_socket_and_symlink_without_mutation(self):
+        with tempfile.TemporaryDirectory(prefix="cg-control-") as directory:
+            path = Path(directory) / "control.sock"
+            arguments = {"worker_uid": os.getuid(), "project_id": "project", "task_id": "task",
+                         "attempt_id": "attempt", "status": lambda: {}, "heartbeat": lambda: {}}
+            with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as existing:
+                existing.bind(str(path))
+            identity = path.lstat()
+            with patch.object(runner.socket, "socket", side_effect=AssertionError("must reject before socket creation")), \
+                    self.assertRaisesRegex(runner.IsolationError, "already exists"):
+                runner.ScopedWorkerControlServer(path, **arguments)
+            self.assertEqual((path.lstat().st_dev, path.lstat().st_ino), (identity.st_dev, identity.st_ino))
+            path.unlink()
+            path.symlink_to(Path(directory) / "absent")
+            with patch.object(runner.socket, "socket", side_effect=AssertionError("must reject before socket creation")), \
+                    self.assertRaisesRegex(runner.IsolationError, "already exists"):
+                runner.ScopedWorkerControlServer(path, **arguments)
+            self.assertTrue(path.is_symlink())
 
     def test_exact_registered_request_round_trips(self):
         value = self.request()
@@ -387,6 +419,96 @@ TIMEOUT
             self.assertEqual(os.waitstatus_to_exitcode(os.waitpid(pid, 0)[1]), 0)
         finally:
             os.close(read_fd)
+
+    def test_socket_limit_rejects_bootstrap_before_broker_or_lock_effects(self):
+        root = self.root / ("w" * (81 - len(os.fsencode(self.root)) - 1))
+        root.mkdir()
+        with patch("control_plane.evaluation_broker.EvaluationBroker", side_effect=AssertionError("broker before validation")), \
+                patch.object(runner.os, "fork", side_effect=AssertionError("fork before validation")), \
+                self.assertRaisesRegex(runner.IsolationError, "80 encoded-byte"):
+            runner.bootstrap_operation(self.profile, root, "status")
+        self.assertEqual(list(root.iterdir()), [])
+
+    def test_fixed_control_socket_at_limit_binds_200_character_protocol_identity(self):
+        # This proves socket/protocol binding, not end-to-end workflow ID limits.
+        root = self.root / ("w" * (80 - len(os.fsencode(self.root)) - 1))
+        root.mkdir(); root.chmod(0o755)
+        state = root / "state"
+        state.mkdir(mode=0o700)
+        graph, worker = self.profile.roles["graph"], self.profile.roles["worker"]
+        os.chown(state, graph.uid, graph.gid)
+        state.chmod(0o700)
+        _launcher, control = runner.workspace_socket_paths(root)
+        self.assertEqual(len(os.fsencode(control)), 107)
+        binding = {"project_id": "project", "task_id": "t" * 200, "attempt_id": "a" * 200}
+        ready_r, ready_w = os.pipe()
+        pid = os.fork()
+        if pid == 0:
+            try:
+                os.close(ready_r); signal.alarm(10)
+                runner._drop_role(graph.uid, graph.gid)
+                server = runner.ScopedWorkerControlServer(control, worker_uid=worker.uid, **binding,
+                    status=lambda: {"state": "RUNNING"}, heartbeat=lambda: {"lease": "LIVE"})
+                os.write(ready_w, b"READY"); os.close(ready_w)
+                count = 0
+                while count < 5:
+                    count += int(server.serve_once())
+                server.close(); os._exit(0)
+            except BaseException as exc:
+                with contextlib.suppress(OSError): os.write(ready_w, repr(exc).encode()[:1024])
+                os._exit(1)
+        os.close(ready_w)
+        try:
+            self.assertTrue(select.select([ready_r], [], [], 3)[0])
+            self.assertEqual(os.read(ready_r, 1024), b"READY")
+            self.assertEqual(control.stat().st_uid, graph.uid)
+            with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as connection:
+                connection.settimeout(3); connection.connect(str(control))
+                runner._send_frame(connection, {"schema_version": 1, "action": "status", **binding})
+                denied = runner._recv_frame(connection)
+            self.assertIn("actual worker UID", denied["error"])
+            requests = [{"schema_version": 1, "action": action, **binding} for action in
+                        ("status", "status", "heartbeat", "heartbeat")]
+            requests[1]["task_id"] = "x" * 200
+            requests[2]["attempt_id"] = "b" * 200
+            code = """
+import json,socket,struct,sys
+value=json.load(sys.stdin); responses=[]
+def read_exact(connection,count):
+    data=b''
+    while len(data)<count:
+        chunk=connection.recv(count-len(data))
+        if not chunk: raise EOFError('server closed')
+        data+=chunk
+    return data
+for request in value['requests']:
+    with socket.socket(socket.AF_UNIX,socket.SOCK_STREAM) as connection:
+        connection.settimeout(3);connection.connect(value['path'])
+        body=json.dumps(request,sort_keys=True,separators=(',',':')).encode()
+        connection.sendall(struct.pack('!I',len(body))+body)
+        size=struct.unpack('!I',read_exact(connection,4))[0]
+        responses.append(json.loads(read_exact(connection,size)))
+print(json.dumps(responses))
+"""
+            result = runner.run_role_process(self.profile, "worker",
+                [self.profile.tools["python"].path, "-I", "-B", "-c", code],
+                stdin=canonical({"path": str(control), "requests": requests}),
+                mounts=[(control, control, True)], timeout_seconds=5)
+            self.assertEqual(result.returncode, 0, result.stderr.decode())
+            self.assertTrue(result.descendants_reaped)
+            responses = json.loads(result.stdout)
+            self.assertEqual(responses[0], {"result": {"state": "RUNNING"}})
+            self.assertIn("cross-task", responses[1]["error"])
+            self.assertIn("cross-task", responses[2]["error"])
+            self.assertEqual(responses[3], {"result": {"lease": "LIVE"}})
+            self.assertEqual(os.waitstatus_to_exitcode(os.waitpid(pid, 0)[1]), 0)
+            pid = None
+            self.assertFalse(control.exists())
+        finally:
+            os.close(ready_r)
+            if pid is not None:
+                with contextlib.suppress(ProcessLookupError): os.kill(pid, signal.SIGKILL)
+                os.waitpid(pid, 0)
 
     def test_nonroot_bootstrap_denies_before_workspace_effects(self):
         read_fd, write_fd = os.pipe()

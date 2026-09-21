@@ -9,7 +9,7 @@
   "properties": {
     "schema_version": {"type": "integer", "const": 1},
     "project_id": {"$ref": "#/$defs/identifier"},
-    "task_id": {"$ref": "#/$defs/identifier"},
+    "task_id": {"$ref": "#/$defs/identifier", "maxLength": 173, "not": {"pattern": "\\.\\.|\\.lock$"}},
     "idempotency_key": {"$ref": "#/$defs/identifier"},
     "base_sha": {"type": "string", "pattern": "^[0-9a-f]{40}$(?![\\s\\S])"},
     "objective": {"$ref": "#/$defs/text"},

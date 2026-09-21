@@ -139,6 +139,61 @@ class RepositoryWorkflowTests(unittest.TestCase):
         self.assertEqual(workflow._git(self.root / "canonical", "remote"), "")
         self.assertFalse((self.root / "canonical/.git/hooks").exists())
 
+    def socket_length_root(self, *, multibyte=False):
+        remaining = 81 - len(os.fsencode(self.directory)) - 1
+        self.assertGreater(remaining, 3)
+        if multibyte:
+            width = len(os.fsencode("한"))
+            self.assertGreater(width, 1)
+            name = "한" * (remaining // width) + "x" * (remaining % width)
+        else:
+            name = "x" * remaining
+        root = self.directory / name
+        self.assertEqual(len(os.fsencode(root)), 81)
+        self.assertEqual(len(os.fsencode(root / "state/.worker-control.sock")), 108)
+        if multibyte:
+            self.assertLess(len(str(root)), 81)
+        return root
+
+    def assert_socket_length_rejected_before_effects(self, root):
+        from control_plane.isolated_runner import IsolationError
+
+        self.root = root
+        # The generic profile seam supplies mode only; the real socket-path
+        # admission must run before any repository or database operation.
+        self.profile.mode = "isolated-linux"
+        before = workflow._tree_inventory(self.directory)
+        with patch.object(workflow, "_git", side_effect=AssertionError("Git ran before path admission")) as git, \
+                patch.object(subprocess, "Popen", side_effect=AssertionError("subprocess ran before path admission")) as process, \
+                patch.object(Path, "mkdir", side_effect=AssertionError("directory created before path admission")) as mkdir, \
+                patch.object(workflow, "apply_database", side_effect=AssertionError("database opened before path admission")) as database:
+            with self.assertRaisesRegex(IsolationError, "80 encoded-byte Unix socket limit"):
+                self.initialize()
+        git.assert_not_called()
+        process.assert_not_called()
+        mkdir.assert_not_called()
+        database.assert_not_called()
+        self.assertFalse(self.root.exists())
+        self.assertEqual(before, workflow._tree_inventory(self.directory))
+
+    def test_isolated_socket_length_rejects_ascii_before_initialization_effects(self):
+        self.assert_socket_length_rejected_before_effects(self.socket_length_root())
+
+    def test_isolated_socket_length_rejects_utf8_bytes_before_initialization_effects(self):
+        self.assert_socket_length_rejected_before_effects(self.socket_length_root(multibyte=True))
+
+    def test_trusted_local_initialization_does_not_apply_socket_length_limit(self):
+        source_before = workflow._tree_inventory(self.source)
+        for multibyte in (False, True):
+            with self.subTest(multibyte=multibyte):
+                self.root = self.socket_length_root(multibyte=multibyte)
+                result = self.initialize()
+                self.assertEqual(result["workflow_state"], "ready")
+                self.assertTrue((self.root / "state/graph.sqlite").is_file())
+                self.assertFalse((self.root / ".launcher.sock").exists())
+                self.assertFalse((self.root / "state/.worker-control.sock").exists())
+        self.assertEqual(source_before, workflow._tree_inventory(self.source))
+
     def test_source_clean_filter_cannot_execute(self):
         marker = self.directory / "filter-ran"
         (self.source / ".gitattributes").write_text("value.py filter=hostile\n")

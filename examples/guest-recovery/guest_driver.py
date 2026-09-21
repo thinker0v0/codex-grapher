@@ -86,8 +86,8 @@ def accounts():
                 pass
             else:
                 raise RuntimeError("guest fixture UID is already allocated")
-            command(["groupadd", "--gid", uid, name])
-            command(["useradd", "--uid", uid, "--gid", uid, "--create-home", "--shell", "/usr/sbin/nologin", name])
+            command(["/usr/sbin/groupadd", "--gid", uid, name])
+            command(["/usr/sbin/useradd", "--uid", uid, "--gid", uid, "--create-home", "--shell", "/usr/sbin/nologin", name])
             account = pwd.getpwnam(name)
         if account.pw_uid != uid or account.pw_gid != uid:
             raise RuntimeError("guest role account identity mismatch")

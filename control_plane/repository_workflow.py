@@ -254,6 +254,9 @@ def initialize_repository_workflow(source: Path, task_path: Path, root: Path, pr
     task_path = Path(task_path).absolute()
     raw_task, raw_profile = read_regular(task_path), read_regular(Path(profile))
     task, execution = parse_task_bytes(raw_task), _profile(Path(profile))
+    if execution.mode == "isolated-linux":
+        from control_plane.isolated_runner import workspace_socket_paths
+        workspace_socket_paths(root)
     policy_path = task_path.parent / task["evaluation"]["policy"]
     checks_path = task_path.parent / task["evaluation"]["checks"]
     raw_policy, raw_checks = read_regular(policy_path), read_regular(checks_path)
@@ -363,7 +366,7 @@ def _worker_control(root: Path, graph: ProjectGraph, task: dict, profile, attemp
     if profile.mode != "isolated-linux":
         yield
         return
-    from control_plane.isolated_runner import ScopedWorkerControlServer, get_active_launcher
+    from control_plane.isolated_runner import ScopedWorkerControlServer, get_active_launcher, workspace_socket_paths
     def status():
         row = graph.get_node(task["task_id"])
         return {"task_id": task["task_id"], "attempt_id": attempt.name, "state": row["state"],
@@ -372,7 +375,8 @@ def _worker_control(root: Path, graph: ProjectGraph, task: dict, profile, attemp
         graph.heartbeat(task["task_id"], lease["lease_id"], OWNER, ttl)
         return status()
     launcher = get_active_launcher()
-    server = ScopedWorkerControlServer(root / "state" / (attempt.name + ".control.sock"),
+    _launcher_path, control_path = workspace_socket_paths(root)
+    server = ScopedWorkerControlServer(control_path,
         worker_uid=profile.roles["worker"].uid, project_id=task["project_id"], task_id=task["task_id"],
         attempt_id=attempt.name, status=status, heartbeat=heartbeat)
     prior = launcher.control_server

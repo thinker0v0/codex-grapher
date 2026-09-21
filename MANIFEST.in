@@ -246,6 +246,7 @@ include tests/test_execution_profile.py
 include tests/test_execution_profile_contract.py
 include tests/test_integrator_verification_view.py
 include tests/test_profile_setup.py
+include tests/test_repository_identifiers.py
 include tests/test_repository_task.py
 include tests/test_representative_preparation.py
 include tests/test_repository_workflow.py

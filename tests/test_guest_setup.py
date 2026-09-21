@@ -8,13 +8,55 @@ import stat
 import subprocess
 import sys
 import tempfile
+from types import SimpleNamespace
 import unittest
+from unittest.mock import patch
 
 ROOT = Path(__file__).resolve().parents[1]
 HARNESS = ROOT / "scripts/verify-guest-recovery.py"
 
 
 class GuestSetupPermissionTests(unittest.TestCase):
+    @unittest.skipUnless(Path("/usr/sbin/groupadd").is_file() and Path("/usr/sbin/useradd").is_file(),
+                         "requires Debian-compatible identity tools for harmless --help probes")
+    def test_guest_account_commands_resolve_with_restricted_path(self):
+        source = ROOT / "examples/guest-recovery/guest_driver.py"
+        spec = importlib.util.spec_from_file_location("guest_recovery_driver", source)
+        driver = importlib.util.module_from_spec(spec)
+        previous_bytecode = sys.dont_write_bytecode
+        try:
+            spec.loader.exec_module(driver)
+        finally:
+            sys.dont_write_bytecode = previous_bytecode
+        self.assertEqual(driver.ENV["PATH"], "/usr/bin:/bin")
+        identities = {"grapher-" + role.replace("_", "-"): uid for role, uid in driver.ROLES.items()}
+        created = set()
+        checked = set()
+
+        def lookup(name):
+            if name not in created:
+                raise KeyError(name)
+            return SimpleNamespace(pw_uid=identities[name], pw_gid=identities[name])
+
+        def harmless_probe(argv):
+            executable = str(argv[0])
+            self.assertIn(executable, {"/usr/sbin/groupadd", "/usr/sbin/useradd"})
+            if executable not in checked:
+                # Execute only fixed --help probes under the real restricted
+                # environment. Never forward account-creation arguments.
+                subprocess.run([executable, "--help"], env=driver.ENV, check=True,
+                               capture_output=True, timeout=5)
+                checked.add(executable)
+            if executable == "/usr/sbin/useradd":
+                created.add(argv[-1])
+
+        with patch.object(driver.pwd, "getpwnam", side_effect=lookup), \
+             patch.object(driver.pwd, "getpwuid", side_effect=KeyError), \
+             patch.object(driver, "command", side_effect=harmless_probe):
+            driver.accounts()
+        self.assertEqual(created, set(identities))
+        self.assertEqual(checked, {"/usr/sbin/groupadd", "/usr/sbin/useradd"})
+
     def test_public_setup_under_private_umask_preserves_existing_paths(self):
         spec = importlib.util.spec_from_file_location("guest_recovery_harness", HARNESS)
         harness = importlib.util.module_from_spec(spec)
