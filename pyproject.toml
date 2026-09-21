@@ -1,0 +1,26 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "codex-grapher"
+version = "0.1.0"
+description = "Durable local task graphs with verified artifacts and recoverable integration"
+readme = "README.md"
+requires-python = ">=3.12"
+license = {file = "LICENSE"}
+dependencies = []
+classifiers = [
+  "Development Status :: 3 - Alpha",
+  "Operating System :: POSIX :: Linux",
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3.12",
+]
+
+[project.scripts]
+codex-grapher = "control_plane.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["control_plane*"]
+exclude = ["tests*"]

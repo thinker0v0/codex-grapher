@@ -23,6 +23,7 @@ from typing import Any, Callable
 from control_plane.publication_store import PublicationPin, PublicationStore
 from control_plane.artifact_builder import safe_relative_artifact_path
 from control_plane.evidence_ingress import MANIFEST_V4_FIELDS, validate_manifest_v4
+from control_plane.evaluation_policy import TaskEvaluationPolicy, validate_task_policy
 
 REQUIRED_GATES = {f"HG{number}" for number in range(1, 12)}
 SECTION_LIMITS = {
@@ -72,11 +73,10 @@ def evaluation_ledger_hash(evaluation: dict[str, Any]) -> str:
 
 
 def _is_number(value: Any) -> bool:
-    return (
-        isinstance(value, (int, float))
-        and not isinstance(value, bool)
-        and math.isfinite(float(value))
-    )
+    try:
+        return type(value) in (int, float) and math.isfinite(value)
+    except OverflowError:
+        return False
 
 
 def _verify_openssl_signature(subject: bytes, signature: bytes, public_key: Path) -> None:
@@ -108,10 +108,26 @@ def verify_evaluation(
     expected_artifact_id: str | object = ...,
     expected_claim_id: str | object = ...,
     expected_previous_ledger_hash: str | None | object = ...,
+    evaluation_policy: TaskEvaluationPolicy | None = None,
 ) -> None:
     """Enforce the frozen score contract and verify an Ed25519 public-key signature."""
-    if not isinstance(evaluation, dict) or set(evaluation) != EVALUATION_FIELDS:
+    fields = EVALUATION_FIELDS
+    sections = SECTION_LIMITS
+    gates_required = REQUIRED_GATES
+    threshold = 95
+    if evaluation_policy is not None:
+        validate_task_policy(evaluation_policy, expected_rubric_sha256)
+        fields = fields | {"schema_version", "policy_sha256"}
+        sections = {name: (minimum, maximum) for name, minimum, maximum in evaluation_policy.sections}
+        gates_required = evaluation_policy.mandatory_gates
+        threshold = evaluation_policy.threshold
+    if not isinstance(evaluation, dict) or set(evaluation) != fields:
         raise PermissionError("evaluation does not match the exact result schema")
+    if evaluation_policy is not None:
+        if type(evaluation["schema_version"]) is not int or evaluation["schema_version"] != 4:
+            raise PermissionError("task evaluation requires schema version 4")
+        if evaluation["policy_sha256"] != evaluation_policy.sha256:
+            raise PermissionError("task evaluation policy hash mismatch")
     for field in ("evaluation_id", "task_id", "contract_id", "evaluator_identity"):
         if not isinstance(evaluation[field], str) or not evaluation[field]:
             raise PermissionError(f"evaluation {field} is invalid")
@@ -137,20 +153,20 @@ def verify_evaluation(
         raise PermissionError("evaluation signature is invalid")
 
     scores = evaluation["section_scores"]
-    if not isinstance(scores, dict) or set(scores) != set(SECTION_LIMITS):
+    if not isinstance(scores, dict) or set(scores) != set(sections):
         raise PermissionError("evaluation must contain the exact frozen section score set")
-    for section, (minimum, maximum) in SECTION_LIMITS.items():
+    for section, (minimum, maximum) in sections.items():
         score = scores[section]
         if not _is_number(score) or not minimum <= float(score) <= maximum:
             raise PermissionError(f"evaluation section minimum or maximum failed: {section}")
     total_score = evaluation["total_score"]
     if not _is_number(total_score) or abs(float(total_score) - sum(float(value) for value in scores.values())) > 1e-9:
         raise PermissionError("evaluation total does not equal its section scores")
-    if evaluation["verdict"] != "PASS" or float(total_score) < 95:
+    if evaluation["verdict"] != "PASS" or float(total_score) < threshold:
         raise PermissionError("evaluation does not meet frozen threshold")
     gates = evaluation["mandatory_gates"]
-    if not isinstance(gates, dict) or set(gates) != REQUIRED_GATES or any(result != "PASS" for result in gates.values()):
-        raise PermissionError("the exact HG1-HG11 set must all pass")
+    if not isinstance(gates, dict) or set(gates) != gates_required or any(result != "PASS" for result in gates.values()):
+        raise PermissionError("the exact frozen mandatory gate set must all pass")
     if evaluation["evaluator_identity"] != "hermes-evaluator":
         raise PermissionError("independent evaluator identity required")
     if evaluation["task_id"] != expected_task_id or evaluation["contract_id"] != expected_contract_id:
@@ -193,11 +209,18 @@ class ProjectIntegrator:
     def __init__(self, repo: Path, binding: Path, evaluator_public_key: Path,
                  rubric_path: Path, accepted_ref: str,
                  expected_binding_group: str | None = None,
-                 publication_root: Path | None = None):
+                 publication_root: Path | None = None,
+                 evaluation_policy: TaskEvaluationPolicy | None = None):
         self.repo = repo.resolve()
         self.binding = Path(os.path.abspath(binding))
         self.evaluator_public_key = Path(os.path.abspath(evaluator_public_key))
-        self.rubric_sha256 = sha256_file(rubric_path)
+        if self.evaluator_public_key.is_symlink() or not self.evaluator_public_key.is_file():
+            raise PermissionError("evaluator public key must be a regular non-symlink file")
+        self._evaluator_public_key_sha256 = sha256_file(self.evaluator_public_key)
+        self.rubric_path = Path(os.path.abspath(rubric_path))
+        self.rubric_sha256 = sha256_file(self.rubric_path)
+        self.evaluation_policy = evaluation_policy
+        self.assert_verification_configuration()
         if not re.fullmatch(r"refs/ai-ops/accepted/[a-z]+", accepted_ref):
             raise ValueError("accepted ref is not canonical")
         self.accepted_ref = accepted_ref
@@ -207,6 +230,19 @@ class ProjectIntegrator:
             publication_root if publication_root is not None
             else self.binding.parent / "publications"
         )
+
+    def assert_verification_configuration(self) -> None:
+        """Refuse changed trusted key/rubric inputs before any checked effects."""
+        if self.evaluator_public_key.is_symlink() or not self.evaluator_public_key.is_file():
+            raise PermissionError("evaluator public key must be a regular non-symlink file")
+        if sha256_file(self.evaluator_public_key) != self._evaluator_public_key_sha256:
+            raise PermissionError("evaluator public key bytes changed after configuration")
+        if self.rubric_path.is_symlink() or not self.rubric_path.is_file():
+            raise PermissionError("frozen rubric must be a regular non-symlink file")
+        if sha256_file(self.rubric_path) != self.rubric_sha256:
+            raise PermissionError("frozen rubric bytes changed after configuration")
+        if self.evaluation_policy is not None:
+            validate_task_policy(self.evaluation_policy, self.rubric_sha256)
 
     @contextmanager
     def _binding_lock(self):
@@ -300,9 +336,11 @@ class ProjectIntegrator:
         expected_contract_id: str,
         fault_hook: FaultHook | None = None,
     ) -> dict[str, Any]:
+        ProjectIntegrator.assert_verification_configuration(self)
         verify_evaluation(
             evaluation, self.evaluator_public_key, evidence_manifest, self.rubric_sha256,
             expected_task_id=expected_task_id, expected_contract_id=expected_contract_id,
+            evaluation_policy=self.evaluation_policy,
         )
         if evaluation["evaluated_git_sha"] != candidate_sha:
             raise PermissionError("evaluation is not bound to candidate SHA")
@@ -376,6 +414,7 @@ class ProjectIntegrator:
 
     def reconcile_promotion(self, expected_base_sha: str, candidate_sha: str) -> str | None:
         """Finish publication -> ref -> binding ordering, or report no side effect."""
+        ProjectIntegrator.assert_verification_configuration(self)
         with self._binding_lock():
             binding, metadata = self._read_binding()
             accepted_sha = self._ref_sha(self.accepted_ref)
@@ -395,6 +434,7 @@ class ProjectIntegrator:
     def rollback(self, expected_current_sha: str, *, expected_previous_sha: str | None = None,
                  fault_hook: FaultHook | None = None) -> dict[str, Any]:
         """Idempotently move the accepted ref and selector to its saved predecessor."""
+        ProjectIntegrator.assert_verification_configuration(self)
         return self.reconcile_rollback(
             expected_current_sha, expected_previous_sha=expected_previous_sha,
             require_started=False, fault_hook=fault_hook,
@@ -404,6 +444,7 @@ class ProjectIntegrator:
         self, expected_current_sha: str, *, expected_previous_sha: str | None = None,
         require_started: bool = False, fault_hook: FaultHook | None = None,
     ) -> dict[str, Any]:
+        ProjectIntegrator.assert_verification_configuration(self)
         with self._binding_lock():
             current, metadata = self._read_binding()
             previous_sha = self._ref_sha(self._rollback_ref(expected_current_sha))

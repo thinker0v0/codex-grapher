@@ -11,7 +11,7 @@ from typing import Any, Callable
 
 from control_plane.evidence_store import get_artifact, get_outcome, resolve_artifact
 from control_plane.project_graph import PROJECTS, ProjectGraph, digest
-from control_plane.project_integrator import ProjectIntegrator
+from control_plane.project_integrator import ProjectIntegrator, sha256_file
 
 
 CrashHook = Callable[[str], None]
@@ -30,6 +30,27 @@ class ProjectCoordinator:
             Path(evidence_root).resolve() if evidence_root is not None else None
         )
         self.worker_project_id = worker_project_id
+        ProjectCoordinator.assert_verification_configuration(self)
+
+    def assert_verification_configuration(self) -> None:
+        """Reject disagreeing trust inputs before Git, binding or database effects."""
+        if type(self.integrator) is not ProjectIntegrator:
+            raise TypeError("external integrity requires an actual ProjectIntegrator")
+        ProjectIntegrator.assert_verification_configuration(self.integrator)
+        if self.graph.rubric_sha256 != self.integrator.rubric_sha256:
+            raise PermissionError("graph and integrator frozen rubric hashes disagree")
+        if self.graph.evaluation_policy != self.integrator.evaluation_policy:
+            raise PermissionError("graph and integrator evaluation policies disagree")
+        graph_key = self.graph.evaluator_public_key
+        integrator_key = self.integrator.evaluator_public_key
+        if graph_key is None:
+            raise PermissionError("graph evaluator public key is not configured")
+        graph_key = Path(graph_key)
+        for key in (graph_key, integrator_key):
+            if key.is_symlink() or not key.is_file():
+                raise PermissionError("evaluator public key must be a regular non-symlink file")
+        if sha256_file(graph_key) != sha256_file(integrator_key):
+            raise PermissionError("graph and integrator evaluator public keys disagree")
 
     @staticmethod
     def require_external_integrity(
@@ -112,6 +133,7 @@ class ProjectCoordinator:
                 raise ValueError("external integrity coordinator is bound to another graph")
             if verifier.integrator.project != project:
                 raise ValueError("external integrity coordinator is bound to another project")
+            ProjectCoordinator.assert_verification_configuration(verifier)
         return normalized
 
     @contextmanager
@@ -143,6 +165,7 @@ class ProjectCoordinator:
     ) -> dict[str, Any]:
         """Preflight every immutable binding before journal, fetch, ref, or binding mutation."""
         ProjectCoordinator.assert_publication_integrity(self)
+        ProjectGraph._assert_no_human_gate(self.graph.get_node(node_id))
         if self.evidence_root is not None and evidence_root.resolve() != self.evidence_root:
             raise PermissionError("integration evidence root differs from durable recovery config")
         if self.worker_project_id is not None and worker_project_id != self.worker_project_id:
@@ -242,6 +265,7 @@ class ProjectCoordinator:
         self._validate_attempt_evidence(attempt)
         if attempt["status"] == "COMPLETED":
             return attempt
+        ProjectGraph._assert_no_human_gate(self.graph.get_node(node_id))
         if attempt["status"] == "PREPARED":
             with self._publication_writer_lock() as writer:
                 ProjectCoordinator.assert_publication_integrity(self)
@@ -455,6 +479,7 @@ class ProjectCoordinator:
 
     def assert_publication_integrity(self) -> None:
         ProjectCoordinator.assert_graph_publication_integrity(self.graph)
+        ProjectCoordinator.assert_verification_configuration(self)
         ProjectCoordinator._assert_durable_evidence_integrity(self)
         ProjectCoordinator._assert_physical_publication_integrity(self)
 
@@ -1018,6 +1043,7 @@ class ProjectCoordinator:
         artifact_id: str, outcome_id: str,
         expected_head_version: int, project: str,
     ) -> dict[str, Any]:
+        ProjectGraph._assert_no_human_gate(self.graph.get_node(node_id))
         try:
             self.graph.connection.execute("BEGIN IMMEDIATE")
             existing = self.graph.connection.execute(
@@ -1044,6 +1070,7 @@ class ProjectCoordinator:
                 self.graph.connection.commit()
                 return row
             ProjectCoordinator.assert_publication_integrity(self)
+            ProjectGraph._assert_no_human_gate(self.graph.get_node(node_id))
             self.graph._assert_project_has_no_pending_publication(project)
             if self._expected_promotion_head_version(expected_base_sha) != expected_head_version:
                 raise RuntimeError("promotion publication-head version changed before PREPARED")
@@ -1076,6 +1103,7 @@ class ProjectCoordinator:
             self.graph.connection.execute("BEGIN IMMEDIATE")
             ProjectCoordinator.assert_publication_integrity(self)
             node = self.graph.get_node(node_id)
+            ProjectGraph._assert_no_human_gate(node)
             attempt = self._attempt_by_id(attempt_id)
             if attempt["status"] != "BINDING_UPDATED":
                 raise RuntimeError("promotion finalization requires BINDING_UPDATED")
@@ -1510,6 +1538,7 @@ class ProjectCoordinator:
         self, attempt: dict[str, Any], origin_node_id: str,
     ) -> dict[str, Any]:
         """Validate the frozen set before any import/ref/binding recovery side effect."""
+        ProjectGraph._assert_no_human_gate(self.graph.get_node(origin_node_id))
         recorded = self._load_prepared_promotion_graph(attempt)
         current = self._promotion_affected_graph(
             self.integrator.project, attempt["expected_base_sha"],

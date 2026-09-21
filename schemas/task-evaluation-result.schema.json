@@ -1,0 +1,119 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:ai-ops:schema:task-evaluation-result:v4",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "evaluation_id",
+    "task_id",
+    "contract_id",
+    "artifact_id",
+    "claim_id",
+    "evaluated_git_sha",
+    "evidence_manifest_sha256",
+    "rubric_sha256",
+    "section_scores",
+    "mandatory_gates",
+    "total_score",
+    "verdict",
+    "evaluator_identity",
+    "previous_ledger_hash",
+    "ledger_hash",
+    "signature",
+    "schema_version",
+    "policy_sha256"
+  ],
+  "properties": {
+    "evaluation_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "task_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "contract_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "artifact_id": {
+      "type": "string",
+      "pattern": "^sha256:[a-f0-9]{64}$"
+    },
+    "claim_id": {
+      "type": "string",
+      "pattern": "^claim:[a-f0-9]{64}$"
+    },
+    "evaluated_git_sha": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{40}$"
+    },
+    "evidence_manifest_sha256": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$"
+    },
+    "rubric_sha256": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$"
+    },
+    "section_scores": {
+      "type": "object",
+      "minProperties": 1,
+      "propertyNames": {
+        "type": "string",
+        "minLength": 1
+      },
+      "additionalProperties": {
+        "type": "number",
+        "minimum": 0,
+        "maximum": 100
+      }
+    },
+    "mandatory_gates": {
+      "type": "object",
+      "minProperties": 1,
+      "propertyNames": {
+        "type": "string",
+        "minLength": 1
+      },
+      "additionalProperties": {
+        "const": "PASS"
+      }
+    },
+    "total_score": {
+      "type": "number",
+      "minimum": 95,
+      "maximum": 100
+    },
+    "verdict": {
+      "const": "PASS"
+    },
+    "evaluator_identity": {
+      "const": "hermes-evaluator"
+    },
+    "previous_ledger_hash": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "pattern": "^[a-f0-9]{64}$"
+    },
+    "ledger_hash": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$"
+    },
+    "signature": {
+      "type": "string",
+      "minLength": 1
+    },
+    "schema_version": {
+      "type": "integer",
+      "const": 4
+    },
+    "policy_sha256": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$"
+    }
+  },
+  "description": "Signed task result; exact score and mandatory-gate names and limits come from the explicitly configured immutable task policy, never this result."
+}

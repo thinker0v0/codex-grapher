@@ -30,3 +30,12 @@ jobs:
         run: bash scripts/verify-foundation.sh
       - name: Run offline example
         run: python examples/offline_demo.py
+      - name: Install developer package
+        run: python -m pip install .
+      - name: Exercise installed workflow outside checkout
+        run: |
+          cd "$RUNNER_TEMP"
+          codex-grapher doctor --json
+          codex-grapher demo --workspace "$RUNNER_TEMP/grapher-ci" --stop-after built --json
+          codex-grapher recover --workspace "$RUNNER_TEMP/grapher-ci" --json
+          codex-grapher rollback --workspace "$RUNNER_TEMP/grapher-ci" --json

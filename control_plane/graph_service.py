@@ -15,6 +15,7 @@ import sqlite3
 import stat
 import struct
 import threading
+import time
 from pathlib import Path
 from typing import Any
 
@@ -26,9 +27,14 @@ from control_plane.project_graph import ProjectGraph
 from control_plane.project_integrator import ProjectIntegrator
 from control_plane.project_coordinator import ProjectCoordinator
 from control_plane.runtime_config import load_runtime
+from control_plane.graph_transport import (
+    MAX_REQUEST, MAX_RESPONSE, SERVER_TIMEOUT_SECONDS, FrameError, receive_frame,
+    remaining, send_frame, timeout_seconds as validate_timeout,
+)
 
 
-MAX_REQUEST = 1024 * 1024
+MAX_WORKERS = 8
+MAX_PENDING = 8
 PROJECT_USERS = {"hermes-fin-korea": "nomad", "hermes-oss": "opensource",
                  "hermes-business": "business", "hermes-hynix": "hynix"}
 
@@ -144,6 +150,24 @@ def _read_task_contract(
 def dispatch(graph: ProjectGraph, templates: dict[str, list[dict[str, Any]]], username: str,
              request: dict[str, Any], coordinators: dict[str, ProjectCoordinator] | None = None,
              runtime: dict[str, dict[str, str]] | None = None) -> Any:
+    if type(request) is not dict or type(request.get("action")) is not str:
+        raise ValueError("request must be an object with a string action")
+    # Do not silently coerce booleans, fractions, or strings into authority/CAS
+    # fields. These checks apply equally to in-process and socket callers.
+    for field in ("version", "expected_head_version"):
+        if field in request and (type(request[field]) is not int or request[field] < 0):
+            raise ValueError(f"{field} must be a nonnegative integer")
+    if "ttl_seconds" in request and (
+        type(request["ttl_seconds"]) is not int or not 10 <= request["ttl_seconds"] <= 3600
+    ):
+        raise ValueError("ttl_seconds must be an integer in 10..3600")
+    if "returncode" in request and type(request["returncode"]) is not int:
+        raise ValueError("returncode must be an integer")
+    if "force_startup" in request and type(request["force_startup"]) is not bool:
+        raise ValueError("force_startup must be a boolean")
+    for field in ("node_id", "lease_id"):
+        if field in request and (type(request[field]) is not str or not request[field]):
+            raise ValueError(f"{field} must be a nonempty string")
     # This shared gate orders DB closure, exact map coverage, durable evidence,
     # and physical projection before authorization, status, or mutation logic.
     coordinators = ProjectCoordinator.require_external_integrity(
@@ -156,10 +180,21 @@ def dispatch(graph: ProjectGraph, templates: dict[str, list[dict[str, Any]]], us
         if username in PROJECT_USERS and username != "hermes-oss":
             project = PROJECT_USERS[username]
         return [row for row in rows if not project or row["project"] == project]
+    if action == "node" and username in {"root", "hermes-evaluator", *PROJECT_USERS}:
+        node_id = request["node_id"]
+        project = node_project(graph, node_id)
+        if username in PROJECT_USERS and project != PROJECT_USERS[username]:
+            raise PermissionError("builder cannot access another project")
+        row = graph.get_node(node_id)
+        # Only the actual builder can recover its own lease capability. Other
+        # authorized readers receive the exact state/version without that token.
+        if username not in PROJECT_USERS or row["lease_owner"] != username:
+            row.pop("lease_id", None)
+        return row
     if action == "create_goal" and username == "hermes-oss":
         _assert_no_pending_publication_mutation(graph, request["project"])
         return plan_goal(graph, templates, request["goal_id"], request["project"], request["objective"], request["accepted_sha"])
-    if action in {"lease", "start", "reconcile", "ingest_evidence"} and username in PROJECT_USERS:
+    if action in {"lease", "start", "heartbeat", "reconcile", "ingest_evidence"} and username in PROJECT_USERS:
         node_id = request["node_id"]
         project = node_project(graph, node_id)
         if project != PROJECT_USERS[username]:
@@ -167,7 +202,7 @@ def dispatch(graph: ProjectGraph, templates: dict[str, list[dict[str, Any]]], us
         _assert_no_pending_publication_mutation(graph, project)
         row = graph.get_node(node_id)
         if action == "lease":
-            return graph.lease(node_id, request["version"], username, int(request.get("ttl_seconds", 300)))
+            return graph.lease(node_id, request["version"], username, request.get("ttl_seconds", 300))
         ingress_replay = (
             action == "ingest_evidence"
             and row["state"] == "EVIDENCE_PENDING"
@@ -181,6 +216,10 @@ def dispatch(graph: ProjectGraph, templates: dict[str, list[dict[str, Any]]], us
             return graph.start(
                 node_id, request["version"], request["lease_id"], username,
             )
+        if action == "heartbeat":
+            if row["state"] not in {"LEASED", "RUNNING"} or not graph._lease_is_live(row):
+                raise PermissionError("heartbeat requires the exact live worker lease")
+            return graph.heartbeat(node_id, request["lease_id"], username, request.get("ttl_seconds", 300))
         if action == "ingest_evidence":
             if not runtime:
                 raise PermissionError("immutable evidence runtime is not configured")
@@ -215,7 +254,7 @@ def dispatch(graph: ProjectGraph, templates: dict[str, list[dict[str, Any]]], us
             return graph.record_ingressed_evidence(
                 node_id, request["version"], artifact,
             )
-        return graph.reconcile_worker(node_id, request["version"], int(request["returncode"]),
+        return graph.reconcile_worker(node_id, request["version"], request["returncode"],
                                       request.get("controller_state"), request.get("evidence"))
     if action == "claim_evidence" and username == "hermes-evaluator" and runtime:
         project = node_project(graph, request["node_id"])
@@ -226,7 +265,7 @@ def dispatch(graph: ProjectGraph, templates: dict[str, list[dict[str, Any]]], us
         )
         claimed = graph.claim_evidence(
             request["node_id"], request["version"], request["artifact_id"], username,
-            int(request.get("ttl_seconds", 600)),
+            request.get("ttl_seconds", 600),
         )
         return {**claimed, "manifest_path": str(manifest_path)}
     if action == "heartbeat_evidence_claim" and username == "hermes-evaluator" and runtime:
@@ -239,7 +278,7 @@ def dispatch(graph: ProjectGraph, templates: dict[str, list[dict[str, Any]]], us
         )
         return graph.heartbeat_evidence_claim(
             request["node_id"], request["version"], request["artifact_id"],
-            request["claim_id"], username, int(request.get("ttl_seconds", 600)),
+            request["claim_id"], username, request.get("ttl_seconds", 600),
         )
     if action == "evaluate" and username == "hermes-evaluator" and runtime:
         project = node_project(graph, request["node_id"])
@@ -315,11 +354,11 @@ def dispatch(graph: ProjectGraph, templates: dict[str, list[dict[str, Any]]], us
             raise PermissionError("rollback project coordinator is not configured")
         return coordinator.rollback(
             request["rollback_id"], request["node_id"],
-            request["integration_attempt_id"], int(request["expected_head_version"]),
+            request["integration_attempt_id"], request["expected_head_version"],
         )
     if action == "recover" and username == "root":
         _assert_no_pending_publication_mutation(graph)
-        return {"recovered": graph.recover_leases(force_startup=bool(request.get("force_startup", False)))}
+        return {"recovered": graph.recover_leases(force_startup=request.get("force_startup", False))}
     raise PermissionError("role is not authorized for graph action")
 
 
@@ -335,6 +374,7 @@ def build_coordinators(
             Path(value["repo"]), Path(value["binding"]), evaluator_public_key,
             rubric_path, value["accepted_ref"], f"hermes-{value['worker_project_id']}",
             publication_root=Path(value["binding"]).parent / "publications",
+            evaluation_policy=graph.evaluation_policy,
         ), Path(value["evidence_root"]), value["worker_project_id"])
         for project, value in runtime.items()
     }
@@ -368,47 +408,116 @@ def reconcile_startup(
     graph.recover_leases()
 
 
+class BoundedConnectionPool:
+    """Own at most workers + pending connections, including queued descriptors."""
+
+    def __init__(self, *, max_workers: int = MAX_WORKERS, max_pending: int = MAX_PENDING,
+                 timeout_seconds: float = SERVER_TIMEOUT_SECONDS):
+        if type(max_workers) is not int or not 1 <= max_workers <= 128:
+            raise ValueError("max_workers must be an integer in 1..128")
+        if type(max_pending) is not int or not 0 <= max_pending <= 128:
+            raise ValueError("max_pending must be an integer in 0..128")
+        self.timeout_seconds = validate_timeout(timeout_seconds)
+        self._slots = threading.BoundedSemaphore(max_workers + max_pending)
+        self._workers = concurrent.futures.ThreadPoolExecutor(
+            max_workers=max_workers, thread_name_prefix="graph-api",
+        )
+
+    def submit(self, connection: socket.socket, *args: Any) -> concurrent.futures.Future | None:
+        deadline = time.monotonic() + self.timeout_seconds
+        if not self._slots.acquire(blocking=False):
+            connection.close()
+            return None
+        try:
+            future = self._workers.submit(handle, connection, *args, deadline=deadline)
+        except BaseException:
+            connection.close()
+            self._slots.release()
+            raise
+
+        def finished(_: concurrent.futures.Future) -> None:
+            # Also closes descriptors belonging to cancelled queued work.
+            connection.close()
+            self._slots.release()
+
+        future.add_done_callback(finished)
+        return future
+
+    def __enter__(self) -> "BoundedConnectionPool":
+        return self
+
+    def __exit__(self, *_: Any) -> None:
+        self._workers.shutdown(wait=True, cancel_futures=True)
+
+
 def serve(socket_path: Path, database: Path, templates_path: Path, evaluator_public_key: Path,
-          rubric_path: Path, runtime_path: Path, socket_group: str) -> None:
+          rubric_path: Path, runtime_path: Path, socket_group: str, *,
+          timeout_seconds: float = SERVER_TIMEOUT_SECONDS,
+          evaluation_policy: Any = None) -> None:
+    validate_timeout(timeout_seconds)
     graph = ProjectGraph(database, evaluator_public_key, hashlib.sha256(rubric_path.read_bytes()).hexdigest(),
-                         allow_cross_thread=True)
+                         allow_cross_thread=True, evaluation_policy=evaluation_policy)
     templates = load_templates(templates_path)
     runtime = load_runtime(runtime_path)
     coordinators = build_coordinators(graph, runtime, evaluator_public_key, rubric_path)
     reconcile_startup(graph, coordinators)
     socket_path.unlink(missing_ok=True)
-    server = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
-    server.bind(str(socket_path))
-    os.chown(socket_path, 0, grp.getgrnam(socket_group).gr_gid)
-    os.chmod(socket_path, 0o660)
-    server.listen(32)
-    database_lock = threading.RLock()
-    with concurrent.futures.ThreadPoolExecutor(max_workers=8, thread_name_prefix="graph-api") as workers:
-        while True:
-            connection, _ = server.accept()
-            workers.submit(handle, connection, graph, templates, coordinators, runtime, database_lock)
+    try:
+        with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as server:
+            server.bind(str(socket_path))
+            os.chown(socket_path, 0, grp.getgrnam(socket_group).gr_gid)
+            os.chmod(socket_path, 0o660)
+            server.listen(MAX_PENDING)
+            database_lock = threading.RLock()
+            with BoundedConnectionPool(timeout_seconds=timeout_seconds) as workers:
+                while True:
+                    connection, _ = server.accept()
+                    workers.submit(connection, graph, templates, coordinators, runtime, database_lock)
+    finally:
+        graph.connection.close()
 
 
 def handle(connection: socket.socket, graph: ProjectGraph, templates: dict[str, list[dict[str, Any]]],
            coordinators: dict[str, ProjectCoordinator], runtime: dict[str, dict[str, str]],
-           database_lock: threading.RLock) -> None:
+           database_lock: threading.RLock, *, deadline: float | None = None,
+           timeout_seconds: float = SERVER_TIMEOUT_SECONDS) -> None:
+    """Bound peer I/O and lock waits, without interrupting committed graph work.
+
+    The admission deadline includes queue time. Authorized synchronous dispatch
+    retains its transaction/recovery semantics; a timeout after dispatch is an
+    uncertain response, and callers must inspect state before retrying mutations.
+    """
+    if deadline is None:
+        deadline = time.monotonic() + validate_timeout(timeout_seconds)
     with connection:
         try:
+            remaining(deadline)
             _, uid, _ = struct.unpack("3i", connection.getsockopt(socket.SOL_SOCKET, socket.SO_PEERCRED, 12))
             username = pwd.getpwuid(uid).pw_name
-            payload = b""
-            while not payload.endswith(b"\n") and len(payload) <= MAX_REQUEST:
-                chunk = connection.recv(65536)
-                if not chunk:
-                    break
-                payload += chunk
-            if len(payload) > MAX_REQUEST:
-                raise ValueError("request exceeds 1 MiB")
-            with database_lock:
-                response = {"ok": True, "result": dispatch(graph, templates, username, json.loads(payload), coordinators, runtime)}
+            payload = receive_frame(connection, deadline, MAX_REQUEST)
+            if not database_lock.acquire(timeout=remaining(deadline)):
+                raise TimeoutError("graph database lock deadline expired")
+            try:
+                remaining(deadline)
+                response = {"ok": True, "result": dispatch(graph, templates, username, payload, coordinators, runtime)}
+            finally:
+                database_lock.release()
+        except TimeoutError:
+            return
         except Exception as exc:
-            response = {"ok": False, "error": f"{type(exc).__name__}: {exc}"}
-        connection.sendall(json.dumps(response, sort_keys=True).encode() + b"\n")
+            # Errors may originate in untrusted file/request bytes. Do not reflect
+            # exception messages, path contents, or request payloads to a peer.
+            response = {"ok": False, "error": f"{type(exc).__name__}: graph request rejected"}
+        try:
+            send_frame(connection, response, deadline, MAX_RESPONSE)
+        except FrameError:
+            try:
+                send_frame(connection, {"ok": False, "error": "graph response exceeds size or encoding limits"},
+                           deadline, MAX_RESPONSE)
+            except (OSError, ValueError):
+                pass
+        except OSError:
+            pass
 
 
 def main() -> int:
@@ -420,9 +529,16 @@ def main() -> int:
     parser.add_argument("--rubric", type=Path, required=True)
     parser.add_argument("--runtime", type=Path, required=True)
     parser.add_argument("--socket-group", default="ai-ops-graph")
+    parser.add_argument("--timeout-seconds", type=float, default=SERVER_TIMEOUT_SECONDS)
+    parser.add_argument("--task-policy", type=Path)
     args = parser.parse_args()
+    evaluation_policy = None
+    if args.task_policy:
+        from control_plane.evaluation_policy import load_task_policy
+        evaluation_policy = load_task_policy(args.task_policy)
     serve(args.socket, args.database, args.templates, args.evaluator_public_key,
-          args.rubric, args.runtime, args.socket_group)
+          args.rubric, args.runtime, args.socket_group,
+          timeout_seconds=args.timeout_seconds, evaluation_policy=evaluation_policy)
     return 0
 
 

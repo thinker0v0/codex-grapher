@@ -82,3 +82,18 @@
   router graph/audit plus final `COMPLETE` response, superseding D022's recorded
   cross-transaction fixture residual. Release remains `NOT_PASS` and the frozen
   rubric is unchanged.
+
+- **D024 · 2026-09-21 · Accepted:** The current user-selected completion target is
+  another developer installing, executing, verifying and recovering local work.
+  Private VPS/Buzz deployment is not a prerequisite for this separate developer
+  cycle. The historical NQ stop is superseded for authorized research and local
+  implementation; original operational release gates remain unchanged.
+- **D025 · 2026-09-21 · Accepted:** Preserve legacy release evaluation v3 and add
+  explicit task evaluation v4 under a trusted, immutable, separately hashed policy.
+  Task acceptance cannot imply product release acceptance or choose its own policy.
+- **D026 · 2026-09-21 · Accepted:** Adapt bounded retry, durable replay/history and
+  worker lifecycle mechanisms identified in the [upstream review](docs/UPSTREAM.md)
+  inside the existing stdlib core. Do not add a parallel orchestration framework.
+- **D027 · 2026-09-21 · Accepted:** Freeze the [developer cycle contract](docs/cycles/20260921-reliability/RUBRIC.md)
+  before implementation. Independent design review approved starting implementation
+  at 97/100; implementation/final-user evidence is evaluated separately.

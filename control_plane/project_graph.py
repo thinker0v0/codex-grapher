@@ -29,6 +29,11 @@ from control_plane.evidence_store import (
     store_outcome,
 )
 from control_plane.project_integrator import evaluation_ledger_hash, verify_evaluation
+from control_plane.evaluation_policy import TaskEvaluationPolicy, validate_task_policy
+from control_plane.retry_policy import (
+    RETRY_EVENT_PREFIX, classify_failure, failure_fingerprint,
+    parse_retry_event, validate_node_policy,
+)
 from control_plane.graph_state import (
     ACTIVE_PROJECTS,
     EXCEPTIONAL_EVENT_TRANSITIONS,
@@ -54,6 +59,11 @@ def canonical(value: Any) -> str:
 
 def digest(value: Any) -> str:
     return hashlib.sha256(canonical(value).encode()).hexdigest()
+
+
+def utc_now() -> dt.datetime:
+    """Wall clock boundary; deadlines are persisted, never recomputed on reopen."""
+    return dt.datetime.now(dt.timezone.utc)
 
 
 def _is_sha256(value: Any) -> bool:
@@ -88,11 +98,15 @@ class ProjectGraph:
     """SQLite checkpoint store with dependency release and resumable leases."""
 
     def __init__(self, database: Path, evaluator_public_key: Path | None = None,
-                 rubric_sha256: str | None = None, allow_cross_thread: bool = False):
+                 rubric_sha256: str | None = None, allow_cross_thread: bool = False,
+                 evaluation_policy: TaskEvaluationPolicy | None = None):
         os.umask(0o077)
         self.database = Path(os.path.abspath(database))
         self.evaluator_public_key = evaluator_public_key
         self.rubric_sha256 = rubric_sha256
+        self.evaluation_policy = evaluation_policy
+        if evaluation_policy is not None:
+            validate_task_policy(evaluation_policy, rubric_sha256)
         if self.database.is_symlink() or not self.database.is_file():
             raise SchemaError(
                 "runtime graph database must be explicitly created by graph_bootstrap.py --apply"
@@ -182,6 +196,11 @@ class ProjectGraph:
     def _add_node_locked(self, node_id: str, goal_id: str, kind: str, spec: dict[str, Any],
                          write_set: list[str], dependencies: list[str] | None = None) -> None:
         """Add a node and its first event inside the caller's transaction."""
+        spec = dict(spec)
+        if self.evaluation_policy is not None:
+            spec.setdefault("evaluation_policy_sha256", self.evaluation_policy.sha256)
+        self._assert_evaluation_policy_binding(spec)
+        validate_node_policy(spec)
         dependencies = dependencies or []
         if not isinstance(spec.get("evaluator_contract_id"), str) or not spec["evaluator_contract_id"]:
             raise ValueError("node requires an evaluator contract ID")
@@ -207,10 +226,23 @@ class ProjectGraph:
             self.connection.execute("INSERT INTO dependencies VALUES(?,?)", (node_id, dependency))
         self._event(node_id, 0, None, state, "node created", digest(spec))
 
+    def _assert_evaluation_policy_binding(self, spec: dict[str, Any]) -> None:
+        """A result or reopen cannot select a different task/legacy policy mode."""
+        if not isinstance(spec, dict):
+            raise PermissionError("node specification is not an object")
+        if self.evaluation_policy is None:
+            if "evaluation_policy_sha256" in spec:
+                raise PermissionError("node requires its frozen task evaluation policy")
+            return
+        validate_task_policy(self.evaluation_policy, self.rubric_sha256)
+        if spec.get("evaluation_policy_sha256") != self.evaluation_policy.sha256:
+            raise PermissionError("node task evaluation policy binding mismatch")
+
     def lease(self, node_id: str, expected_version: int, owner: str, ttl_seconds: int = 300) -> dict[str, Any]:
         """Lease only when its write set does not overlap active goals in the project."""
         self.assert_static_integrity()
-        if not owner or not 10 <= ttl_seconds <= 3600:
+        if (type(owner) is not str or not owner or type(ttl_seconds) is not int
+                or not 10 <= ttl_seconds <= 3600 or type(expected_version) is not int):
             raise ValueError("lease owner and TTL of 10..3600 seconds required")
         try:
             self.connection.execute("BEGIN IMMEDIATE")
@@ -218,6 +250,16 @@ class ProjectGraph:
             self._assert_node_has_no_pending_publication(row)
             if row["version"] != expected_version or row["state"] != "READY":
                 raise ValueError("node is not ready at expected version")
+            blocker = self._retry_blocker(row)
+            if blocker:
+                self._transition_locked(row, expected_version, "NEEDS_HUMAN", blocker)
+                self.connection.commit()
+                raise PermissionError(blocker)
+            retry = self.retry_status(node_id)
+            now = utc_now()
+            if (retry["next_eligible_at"] is not None
+                    and now < dt.datetime.fromisoformat(retry["next_eligible_at"])):
+                raise RuntimeError(f"retry backoff active until {retry['next_eligible_at']}")
             wanted = {Path(value) for value in json.loads(row["write_set_json"])}
             active = self.connection.execute(
                 "SELECT n.node_id,n.write_set_json FROM nodes n JOIN goals g ON g.goal_id=n.goal_id "
@@ -229,12 +271,11 @@ class ProjectGraph:
                 held = {Path(value) for value in json.loads(other["write_set_json"])}
                 if any(a == b or a in b.parents or b in a.parents for a in wanted for b in held):
                     raise RuntimeError(f"write-set conflict with {other['node_id']}")
-            now = dt.datetime.now(dt.timezone.utc)
             lease_id = uuid.uuid4().hex
             version = expected_version + 1
             self.connection.execute(
-                "UPDATE nodes SET state='LEASED',version=?,attempt=attempt+1,lease_id=?,lease_owner=?,lease_expires_at=?,heartbeat_at=?,updated_at=CURRENT_TIMESTAMP WHERE node_id=? AND version=? AND state='READY'",
-                (version, lease_id, owner, (now + dt.timedelta(seconds=ttl_seconds)).isoformat(),
+                "UPDATE nodes SET state='LEASED',version=?,attempt=?,lease_id=?,lease_owner=?,lease_expires_at=?,heartbeat_at=?,updated_at=CURRENT_TIMESTAMP WHERE node_id=? AND version=? AND state='READY'",
+                (version, retry["attempts_consumed"] + 1, lease_id, owner, (now + dt.timedelta(seconds=ttl_seconds)).isoformat(),
                  now.isoformat(), node_id, expected_version),
             )
             self._event(node_id, version, row["state"], "LEASED", f"leased to {owner}", digest({"lease_id": lease_id}))
@@ -246,16 +287,18 @@ class ProjectGraph:
 
     def heartbeat(self, node_id: str, lease_id: str, owner: str, ttl_seconds: int = 300) -> dict[str, Any]:
         self.assert_static_integrity()
+        if type(ttl_seconds) is not int or not 10 <= ttl_seconds <= 3600:
+            raise ValueError("heartbeat TTL must be an integer in 10..3600")
         try:
             self.connection.execute("BEGIN IMMEDIATE")
             row = self.get_node(node_id)
             self._assert_node_has_no_pending_publication(row)
+            self._assert_no_human_gate(row)
             if (row["state"] not in {"LEASED", "RUNNING"}
                     or row["lease_id"] != lease_id or row["lease_owner"] != owner):
                 raise PermissionError("lease identity mismatch")
-            now = dt.datetime.now(dt.timezone.utc)
-            if (dt.datetime.fromisoformat(row["lease_expires_at"]) <= now
-                    or not 10 <= ttl_seconds <= 3600):
+            now = utc_now()
+            if not self._lease_is_live(row, now):
                 raise PermissionError("lease expired or invalid TTL")
             self.connection.execute(
                 "UPDATE nodes SET heartbeat_at=?,lease_expires_at=?,updated_at=CURRENT_TIMESTAMP WHERE node_id=? AND lease_id=?",
@@ -269,7 +312,7 @@ class ProjectGraph:
 
     @staticmethod
     def _lease_is_live(row: dict[str, Any], now: dt.datetime | None = None) -> bool:
-        now = now or dt.datetime.now(dt.timezone.utc)
+        now = now or utc_now()
         try:
             expiry = dt.datetime.fromisoformat(row["lease_expires_at"])
         except (TypeError, ValueError):
@@ -284,10 +327,13 @@ class ProjectGraph:
     def start(self, node_id: str, expected_version: int, lease_id: str, owner: str) -> dict[str, Any]:
         """Start only under the exact, unexpired worker lease."""
         self.assert_static_integrity()
+        if type(expected_version) is not int:
+            raise ValueError("node version must be an integer")
         try:
             self.connection.execute("BEGIN IMMEDIATE")
             row = self.get_node(node_id)
             self._assert_node_has_no_pending_publication(row)
+            self._assert_no_human_gate(row)
             if (
                 row["state"] != "LEASED" or row["version"] != expected_version
                 or row["lease_id"] != lease_id or row["lease_owner"] != owner
@@ -295,7 +341,7 @@ class ProjectGraph:
             ):
                 raise PermissionError("worker start requires the exact unexpired lease")
             result = self._transition_locked(
-                row, expected_version, "RUNNING", "worker started",
+                row, expected_version, "RUNNING", "worker started", worker_start=True,
             )
             self.connection.commit()
             return result
@@ -347,6 +393,8 @@ class ProjectGraph:
                    evidence: dict[str, Any] | None = None,
                    *, publication_operation_id: str | None = None) -> dict[str, Any]:
         self.assert_static_integrity()
+        if type(reason) is not str or reason.startswith(RETRY_EVENT_PREFIX):
+            raise ValueError("reserved or invalid transition reason")
         try:
             self.connection.execute("BEGIN IMMEDIATE")
             row = self.get_node(node_id)
@@ -365,11 +413,18 @@ class ProjectGraph:
     def _transition_locked(
         self, row: dict[str, Any], expected_version: int, target: str, reason: str,
         evidence: dict[str, Any] | None = None,
+        *, worker_start: bool = False, retry_record: bool = False,
     ) -> dict[str, Any]:
         """Apply one transition inside the caller's IMMEDIATE transaction."""
         node_id = row["node_id"]
-        if row["version"] != expected_version:
+        if type(expected_version) is not int or row["version"] != expected_version:
             raise ValueError("optimistic version conflict")
+        if target == "LEASED" or (target == "RUNNING" and not worker_start):
+            raise ValueError("worker transitions require the lease/start admission APIs")
+        if target == "READY" and row["state"] in {"LEASED", "RUNNING", "EVIDENCE_PENDING"} and not retry_record:
+            raise ValueError("worker retries require classified reconciliation or recovery")
+        if target in {"LEASED", "RUNNING", "EVIDENCE_PENDING", "PASSED", "INTEGRATING"} or (target == "READY" and not retry_record):
+            self._assert_no_human_gate(row)
         if row["state"] in TERMINAL or target not in TRANSITIONS.get(row["state"], set()):
             raise ValueError(f"forbidden transition {row['state']} -> {target}")
         if target in {"EVIDENCE_PENDING", "EVALUATING"}:
@@ -389,9 +444,9 @@ class ProjectGraph:
                     or not row["evaluation_hash"] or not ledger or ledger[0] != row["evaluation_hash"]):
                 raise ValueError("PASS requires the node's existing verified evaluator record")
         evidence_hash = digest(evidence) if evidence else row["evidence_hash"]
-        lease_id = uuid.uuid4().hex if target == "LEASED" else row["lease_id"]
+        lease_id = row["lease_id"]
         clear_lease = target not in {"LEASED", "RUNNING"}
-        attempt = row["attempt"] + (target == "LEASED")
+        attempt = row["attempt"]
         version = expected_version + 1
         changed = self.connection.execute(
             "UPDATE nodes SET state=?,version=?,attempt=?,lease_id=?,"
@@ -409,7 +464,7 @@ class ProjectGraph:
             raise ValueError("concurrent transition")
         self._event(
             node_id, version, row["state"], target, reason,
-            evidence_hash or digest({}),
+            digest(parse_retry_event(reason)) if retry_record else evidence_hash or digest({}),
         )
         return self.get_node(node_id)
 
@@ -425,6 +480,7 @@ class ProjectGraph:
             self.connection.execute("BEGIN IMMEDIATE")
             row = self.get_node(node_id)
             self._assert_node_has_no_pending_publication(row)
+            self._assert_no_human_gate(row)
             project_row = self.connection.execute(
                 "SELECT project FROM goals WHERE goal_id=?", (row["goal_id"],)
             ).fetchone()
@@ -492,6 +548,7 @@ class ProjectGraph:
             self.connection.execute("BEGIN IMMEDIATE")
             row = self.get_node(node_id)
             self._assert_node_has_no_pending_publication(row)
+            self._assert_no_human_gate(row)
             request_version = expected_version
             if row["state"] == "EVALUATING" and row["active_artifact_id"] == artifact_id:
                 active = self.connection.execute(
@@ -584,6 +641,7 @@ class ProjectGraph:
             self.connection.execute("BEGIN IMMEDIATE")
             row = self.get_node(node_id)
             self._assert_node_has_no_pending_publication(row)
+            self._assert_no_human_gate(row)
             if (
                 row["state"] != "EVALUATING"
                 or row["version"] != expected_version
@@ -614,6 +672,7 @@ class ProjectGraph:
             raise PermissionError("evaluator public key and frozen rubric hash are not configured")
         row = self.get_node(node_id)
         self._assert_node_has_no_pending_publication(row)
+        self._assert_no_human_gate(row)
         if row["state"] == "PASSED" and row["version"] == expected_version + 1:
             outcome = self.connection.execute(
                 "SELECT outcome_id FROM evaluation_outcomes WHERE node_id=? AND artifact_id=?",
@@ -657,6 +716,7 @@ class ProjectGraph:
             expected_task_id=node_id, expected_contract_id=contract_id,
             expected_artifact_id=artifact_id, expected_claim_id=claim["claim_id"],
             expected_previous_ledger_hash=previous_ledger_hash,
+            evaluation_policy=self.evaluation_policy,
         )
         result_sha = evaluation["evaluated_git_sha"]
         evaluation_hash = digest(evaluation)
@@ -665,6 +725,7 @@ class ProjectGraph:
             self.connection.execute("BEGIN IMMEDIATE")
             row = self.get_node(node_id)
             self._assert_node_has_no_pending_publication(row)
+            self._assert_no_human_gate(row)
             if row["state"] != "EVALUATING" or row["version"] != expected_version:
                 raise ValueError("node is not awaiting this evaluation")
             current_previous = self.connection.execute(
@@ -736,7 +797,9 @@ class ProjectGraph:
             self.connection.execute("BEGIN IMMEDIATE")
             row = self.get_node(node_id)
             self._assert_node_has_no_pending_publication(row)
-            if row["state"] == target and row["version"] == expected_version + 1:
+            if ((row["state"] == target and row["version"] == expected_version + 1)
+                    or (disposition == "RETRY" and row["state"] == "NEEDS_HUMAN"
+                        and row["version"] == expected_version + 2)):
                 claim = self.connection.execute(
                     "SELECT * FROM evaluation_claims WHERE artifact_id=? AND node_id=? "
                     "AND claim_version=?",
@@ -777,10 +840,20 @@ class ProjectGraph:
             ).rowcount
             if changed != 1:
                 raise ValueError("concurrent evaluator disposition")
+            reason = f"independent evaluator disposition {disposition}"
+            if disposition == "RETRY":
+                reason = RETRY_EVENT_PREFIX + canonical(self._failure_record(
+                    row, "EVALUATOR_RETRY", "EVALUATING", None,
+                ))
             self._event(
                 node_id, version, "EVALUATING", target,
-                f"independent evaluator disposition {disposition}", reason_sha256,
+                reason, reason_sha256,
             )
+            if disposition == "RETRY":
+                updated = self.get_node(node_id)
+                blocker = self._retry_blocker(updated)
+                if blocker:
+                    self._transition_locked(updated, version, "NEEDS_HUMAN", blocker)
             self.connection.commit()
         except Exception:
             self.connection.rollback()
@@ -796,6 +869,7 @@ class ProjectGraph:
     ) -> tuple[dict[str, Any], dict[str, Any]]:
         """Authorize integration state, then reverify the recorded signed outcome."""
         row = self.get_node(node_id)
+        self._assert_no_human_gate(row)
         if row["state"] not in {"PASSED", "INTEGRATING", "INTEGRATED"}:
             raise PermissionError("only a passed node may enter or recover integration")
         return self.verify_recorded_outcome(
@@ -809,12 +883,21 @@ class ProjectGraph:
         artifact_id: str,
         evidence_manifest: Path,
     ) -> tuple[dict[str, Any], dict[str, Any]]:
-        """State-independently reverify one canonical outcome and its full DB closure."""
+        """Read-only outcome verification, not permission to execute or promote.
+
+        Historical human-gated outcomes remain inspectable after an upgrade.
+        Mutation callers must separately pass validate_recorded_outcome.
+        """
+        self.assert_static_integrity()
         if self.evaluator_public_key is None or self.rubric_sha256 is None:
             raise PermissionError("evaluator public key and frozen rubric hash are not configured")
         row = self.get_node(node_id)
         try:
-            contract_id = json.loads(row["spec_json"])["evaluator_contract_id"]
+            spec = json.loads(row["spec_json"])
+            if digest(spec) != row["spec_hash"]:
+                raise PermissionError("node specification hash mismatch")
+            self._assert_evaluation_policy_binding(spec)
+            contract_id = spec["evaluator_contract_id"]
         except (KeyError, TypeError, json.JSONDecodeError):
             raise PermissionError("recorded node evaluator contract is invalid") from None
         context = self.connection.execute(
@@ -897,6 +980,7 @@ class ProjectGraph:
             expected_artifact_id=artifact_id,
             expected_claim_id=claim["claim_id"],
             expected_previous_ledger_hash=ledger["previous_ledger_hash"],
+            evaluation_policy=self.evaluation_policy,
         )
         if row["result_sha"] != evaluation["evaluated_git_sha"]:
             raise PermissionError("evaluation candidate does not match the node's recorded result")
@@ -937,6 +1021,7 @@ class ProjectGraph:
         self, row: dict[str, Any], expected_version: int, integration_sha: str,
     ) -> dict[str, Any]:
         """Record the integrated origin inside the coordinator's transaction."""
+        self._assert_no_human_gate(row)
         if row["state"] != "INTEGRATING" or row["version"] != expected_version:
             raise ValueError("node is not awaiting integration")
         version = expected_version + 1
@@ -955,25 +1040,120 @@ class ProjectGraph:
 
     def reconcile_worker(self, node_id: str, expected_version: int, returncode: int,
                          controller_state: str | None, evidence: dict[str, Any] | None) -> dict[str, Any]:
-        """Never equate rc=0 with success; require controller state and evidence."""
-        if returncode == 0 and controller_state == "EVIDENCE_PENDING" and evidence:
-            return self.transition(
-                node_id, expected_version, "READY",
-                "legacy reconcile cannot admit evidence; immutable ingress is required",
-            )
-        if returncode == 0 and not controller_state:
-            return self.transition(node_id, expected_version, "READY", "unknown controller state; safe retry")
-        return self.transition(node_id, expected_version, "READY", f"worker rc={returncode}; retryable")
+        """Record a classified failure; only immutable ingress can admit success."""
+        self.assert_static_integrity()
+        failure_class, state = classify_failure(returncode, controller_state)
+        if type(expected_version) is not int:
+            raise ValueError("node version must be an integer")
+        try:
+            self.connection.execute("BEGIN IMMEDIATE")
+            row = self.get_node(node_id)
+            self._assert_node_has_no_pending_publication(row)
+            if row["state"] not in {"LEASED", "RUNNING"} or row["version"] != expected_version:
+                raise ValueError("reconciliation requires the current worker attempt")
+            if not self._lease_is_live(row):
+                raise PermissionError("expired worker lease requires recovery")
+            result = self._record_failure_locked(row, failure_class, state, returncode)
+            self.connection.commit()
+            return result
+        except Exception:
+            self.connection.rollback()
+            raise
+
+    @staticmethod
+    def _assert_no_human_gate(row: dict[str, Any]) -> None:
+        spec = json.loads(row["spec_json"])
+        validate_node_policy(spec)
+        if spec.get("human_gate", False):
+            raise PermissionError("pending human gate: signed approval capability is not implemented")
+
+    def retry_status(self, node_id: str) -> dict[str, Any]:
+        """Derive the retry projection from immutable policy and audited outcomes."""
+        row = self.get_node(node_id)
+        policy = validate_node_policy(json.loads(row["spec_json"]))
+        events = self.connection.execute(
+            "SELECT new_state,reason FROM events WHERE node_id=? ORDER BY version", (node_id,),
+        ).fetchall()
+        attempts = max(row["attempt"], sum(event["new_state"] == "LEASED" for event in events))
+        outcomes = [record for event in events if (record := parse_retry_event(event["reason"])) is not None]
+        attempts = max(attempts, max((record["attempt"] for record in outcomes), default=0))
+        latest = outcomes[-1] if outcomes else None
+        identical = 0
+        for record in reversed(outcomes):
+            if record["fingerprint"] != latest["fingerprint"]:
+                break
+            identical += 1
+        return {
+            "attempts_consumed": attempts, "max_attempts": policy.max_attempts,
+            "identical_failures": identical, "max_identical_failures": policy.max_identical_failures,
+            "next_eligible_at": latest["next_eligible_at"] if latest else None,
+            "failure_class": latest["failure_class"] if latest else None,
+        }
+
+    def _retry_blocker(self, row: dict[str, Any]) -> str | None:
+        spec = json.loads(row["spec_json"])
+        validate_node_policy(spec)
+        if spec.get("human_gate", False):
+            return "pending human gate: signed approval capability is not implemented"
+        status = self.retry_status(row["node_id"])
+        if status["attempts_consumed"] >= status["max_attempts"]:
+            return "retry attempt limit reached; review the failed task and plan new work"
+        if status["identical_failures"] >= status["max_identical_failures"]:
+            return "repeated identical failure; review evidence and change the task before retrying"
+        if status["failure_class"] in {"SAFETY", "PERMANENT", "BUDGET", "CANCELLED", "HUMAN"}:
+            return "non-retryable controller outcome; human review required"
+        return None
+
+    def _failure_record(self, row: dict[str, Any], failure_class: str,
+                        controller_state: str, returncode: int | None) -> dict[str, Any]:
+        policy = validate_node_policy(json.loads(row["spec_json"]))
+        now = utc_now()
+        attempt = self.retry_status(row["node_id"])["attempts_consumed"]
+        retryable = failure_class not in {"SAFETY", "PERMANENT", "BUDGET", "CANCELLED", "HUMAN"}
+        return {
+            "attempt": attempt, "failure_class": failure_class,
+            "controller_state": controller_state, "returncode": returncode,
+            "fingerprint": failure_fingerprint(failure_class, controller_state, returncode),
+            "recorded_at": now.isoformat(),
+            "next_eligible_at": (now + dt.timedelta(seconds=policy.delay(attempt))).isoformat() if retryable else None,
+        }
+
+    def _record_failure_locked(self, row: dict[str, Any], failure_class: str,
+                               controller_state: str, returncode: int | None) -> dict[str, Any]:
+        record = self._failure_record(row, failure_class, controller_state, returncode)
+        if row["attempt"] != record["attempt"]:
+            # Recognized legacy histories may predate a populated attempt
+            # projection. Preserve all observed consumption when recovering.
+            self.connection.execute("UPDATE nodes SET attempt=? WHERE node_id=?", (record["attempt"], row["node_id"]))
+            row = self.get_node(row["node_id"])
+        terminal = failure_class in {"SAFETY", "PERMANENT", "BUDGET"}
+        target = "CANCELLED" if failure_class == "CANCELLED" else (
+            "FAILED_GATE" if terminal and row["state"] == "RUNNING" else "READY"
+        )
+        result = self._transition_locked(
+            row, row["version"], target, RETRY_EVENT_PREFIX + canonical(record),
+            retry_record=True,
+        )
+        # Use only the existing schema-v5 transitions. READY -> NEEDS_HUMAN
+        # commits atomically with the outcome, so no dispatcher can lease between.
+        blocker = self._retry_blocker(result) if target == "READY" else None
+        if blocker:
+            result = self._transition_locked(result, result["version"], "NEEDS_HUMAN", blocker)
+            if terminal:
+                result = self._transition_locked(
+                    result, result["version"], "FAILED_GATE", "non-retryable controller failure",
+                )
+        return result
 
     def recover_leases(self, force_startup: bool = False) -> int:
         self.assert_static_integrity()
+        if type(force_startup) is not bool:
+            raise ValueError("force_startup must be a boolean")
         recovered_claims = self.recover_evaluator_claims()
-        now = dt.datetime.now(dt.timezone.utc).isoformat()
-        rows = self.connection.execute(
-            "SELECT node_id,version,state FROM nodes WHERE "
-            "state IN ('LEASED','RUNNING') AND (? OR lease_expires_at<=?)",
-            (int(force_startup), now),
-        ).fetchall()
+        now = utc_now()
+        rows = [dict(row) for row in self.connection.execute(
+            "SELECT * FROM nodes WHERE state IN ('LEASED','RUNNING')",
+        ).fetchall() if force_startup or not self._lease_is_live(dict(row), now)]
         integration_table = self.connection.execute(
             "SELECT 1 FROM sqlite_master WHERE type='table' AND name='integration_attempts'"
         ).fetchone()
@@ -991,8 +1171,22 @@ class ProjectGraph:
                 continue
             rows.append(row)
         for row in rows:
-            target = "PASSED" if row["state"] == "INTEGRATING" else "READY"
-            self.transition(row["node_id"], row["version"], target, "startup lease recovery")
+            if row["state"] == "INTEGRATING":
+                self.transition(row["node_id"], row["version"], "PASSED", "startup lease recovery")
+                continue
+            try:
+                self.connection.execute("BEGIN IMMEDIATE")
+                current = self.get_node(row["node_id"])
+                self._assert_node_has_no_pending_publication(current)
+                if current["version"] != row["version"] or current["state"] != row["state"]:
+                    raise ValueError("worker changed during lease recovery")
+                if not force_startup and self._lease_is_live(current, now):
+                    raise ValueError("worker renewed during lease recovery")
+                self._record_failure_locked(current, "LOST_LEASE", current["state"], None)
+                self.connection.commit()
+            except Exception:
+                self.connection.rollback()
+                raise
         return recovered_claims + len(rows)
 
     def recover_evaluator_claims(self, now: dt.datetime | None = None) -> int:
@@ -1151,8 +1345,29 @@ class ProjectGraph:
         if orphan_event:
             raise RuntimeError(f"event chain references a missing node: {orphan_event['node_id']}")
         for row in self.connection.execute(
-            "SELECT node_id FROM nodes ORDER BY node_id"
+            "SELECT * FROM nodes ORDER BY node_id"
         ).fetchall():
+            try:
+                spec = json.loads(row["spec_json"])
+                validate_node_policy(spec)
+                if digest(spec) != row["spec_hash"]:
+                    raise ValueError("specification hash mismatch")
+                genesis = self.connection.execute(
+                    "SELECT reason,payload_hash FROM events WHERE node_id=? AND version=0",
+                    (row["node_id"],),
+                ).fetchone()
+                # Recognized predecessor fixtures may have synthetic genesis
+                # payloads. Runtime nodes and policy-bearing nodes always bind
+                # the exact immutable specification in their first event.
+                runtime_spec = any(key in spec for key in (
+                    "evaluator_contract_id", "retry_policy", "evaluation_policy_sha256", "human_gate",
+                ))
+                if (not genesis or ((runtime_spec or genesis["reason"] == "node created")
+                        and genesis["payload_hash"] != row["spec_hash"])):
+                    raise ValueError("specification genesis binding mismatch")
+                self._assert_evaluation_policy_binding(spec)
+            except (KeyError, TypeError, ValueError, PermissionError) as exc:
+                raise RuntimeError(f"node specification/retry integrity failed: {row['node_id']}: {exc}") from exc
             if not self.verify_event_chain(row["node_id"]):
                 raise RuntimeError(f"node event chain is invalid: {row['node_id']}")
 
@@ -1160,9 +1375,67 @@ class ProjectGraph:
             allow_completion_append_transient=allow_completion_append_transient,
         )
         self._assert_evaluation_integrity()
+        for row in self.connection.execute("SELECT * FROM nodes ORDER BY node_id").fetchall():
+            spec = json.loads(row["spec_json"])
+            runtime_spec = any(key in spec for key in (
+                "evaluator_contract_id", "retry_policy", "evaluation_policy_sha256", "human_gate",
+            ))
+            try:
+                self._assert_retry_integrity(dict(row), runtime_spec)
+            except (KeyError, TypeError, ValueError) as exc:
+                raise RuntimeError(f"node retry integrity failed: {row['node_id']}: {exc}") from exc
         self._assert_integration_event_integrity(
             allow_completion_append_transient=allow_completion_append_transient,
         )
+
+    def _assert_retry_integrity(self, node: dict[str, Any], runtime_spec: bool) -> None:
+        policy = validate_node_policy(json.loads(node["spec_json"]))
+        attempts = 0
+        recorded_attempts: set[int] = set()
+        for event in self.connection.execute(
+            "SELECT * FROM events WHERE node_id=? ORDER BY version", (node["node_id"],),
+        ).fetchall():
+            attempts += event["new_state"] == "LEASED"
+            record = parse_retry_event(event["reason"])
+            if record is None:
+                continue
+            attempt = record["attempt"]
+            if ((runtime_spec and attempt != attempts) or attempt < attempts
+                    or attempt <= max(recorded_attempts, default=0)):
+                raise ValueError("retry outcome is not bound to one exact consumed attempt")
+            recorded_attempts.add(attempt)
+            failure_class, state, returncode = (
+                record["failure_class"], record["controller_state"], record["returncode"],
+            )
+            if failure_class == "LOST_LEASE":
+                if returncode is not None or state != event["old_state"] or state not in {"LEASED", "RUNNING"}:
+                    raise ValueError("lost lease classification mismatch")
+            elif failure_class == "EVALUATOR_RETRY":
+                if returncode is not None or state != "EVALUATING" or event["old_state"] != state:
+                    raise ValueError("evaluator retry classification mismatch")
+            elif classify_failure(returncode, state) != (failure_class, state):
+                raise ValueError("worker failure classification mismatch")
+            if event["old_state"] not in {"LEASED", "RUNNING", "EVALUATING"} or event["new_state"] not in {"READY", "FAILED_GATE", "CANCELLED"}:
+                raise ValueError("retry outcome transition mismatch")
+            if failure_class != "EVALUATOR_RETRY" and event["payload_hash"] != digest(record):
+                raise ValueError("retry payload binding mismatch")
+            if record["fingerprint"] != failure_fingerprint(failure_class, state, returncode):
+                raise ValueError("retry fingerprint mismatch")
+            recorded = dt.datetime.fromisoformat(record["recorded_at"])
+            if recorded.tzinfo is None:
+                raise ValueError("retry timestamp requires a timezone")
+            if failure_class in {"SAFETY", "PERMANENT", "BUDGET", "CANCELLED", "HUMAN"}:
+                if record["next_eligible_at"] is not None:
+                    raise ValueError("non-retryable failure has a retry deadline")
+            elif (dt.datetime.fromisoformat(record["next_eligible_at"])
+                    != recorded + dt.timedelta(seconds=policy.delay(attempt))):
+                raise ValueError("retry deadline does not match immutable policy")
+        if type(node["attempt"]) is not int or node["attempt"] < 0:
+            raise ValueError("invalid attempt counter")
+        if runtime_spec and node["attempt"] != attempts:
+            raise ValueError("attempt counter differs from lease event history")
+        if recorded_attempts and node["attempt"] < max(recorded_attempts):
+            raise ValueError("attempt counter is below its immutable retry history")
 
     def _assert_completed_promotion_origin_integrity(
         self, *, allow_completion_append_transient: bool,
@@ -1453,6 +1726,10 @@ class ProjectGraph:
                 "WHERE node_id=? AND version=?",
                 (claim["node_id"], claim["claim_version"] + 2),
             ).fetchone()
+            if status == "DISPOSED" and claim["disposition"] == "RETRY" and resolution_event:
+                retry_record = parse_retry_event(resolution_event["reason"])
+                if retry_record is not None and retry_record["failure_class"] == "EVALUATOR_RETRY":
+                    reason = resolution_event["reason"]
             if not resolution_event or (
                 resolution_event["old_state"], resolution_event["new_state"],
                 resolution_event["reason"], resolution_event["payload_hash"],
@@ -1760,15 +2037,26 @@ class ProjectGraph:
         return proofs == 1
 
     def portfolio_status(self) -> list[dict[str, Any]]:
+        self.assert_static_integrity()
         rows = self.connection.execute(
             "SELECT g.project,g.goal_id,g.objective,g.accepted_sha,g.state AS goal_state,"
-            "n.node_id,n.kind,n.state,n.attempt,n.evaluation_hash,n.integration_sha,"
+            "n.node_id,n.kind,n.state,n.version,n.attempt,n.base_sha,"
+            "n.lease_expires_at,n.heartbeat_at,n.evaluation_hash,n.integration_sha,"
             "a.artifact_id,a.manifest_sha256,a.claim_id "
             "FROM goals g LEFT JOIN nodes n ON n.goal_id=g.goal_id "
             "LEFT JOIN evidence_artifacts a ON a.artifact_id=n.active_artifact_id "
             "ORDER BY g.project,n.rowid"
         ).fetchall()
-        return [dict(row) for row in rows]
+        result = []
+        for row in rows:
+            item = dict(row)
+            if row["node_id"] is not None:
+                node = self.get_node(row["node_id"])
+                item["retry"] = self.retry_status(row["node_id"])
+                item["human_gate"] = json.loads(node["spec_json"]).get("human_gate", False)
+                item["blocked_reason"] = self._retry_blocker(node) if item["human_gate"] or row["state"] in {"READY", "NEEDS_HUMAN"} else None
+            result.append(item)
+        return result
 
     def release_dependencies(self, goal_id: str) -> list[str]:
         self.assert_static_integrity()
