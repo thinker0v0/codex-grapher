@@ -215,9 +215,8 @@ def raw_observe():
 
 
 def observe():
-    from control_plane.repository_workflow import verify_workspace, workspace_lock
-    with workspace_lock(WORKSPACE):
-        summary = verify_workspace(WORKSPACE)
+    from control_plane.isolated_runner import bootstrap_operation
+    summary = bootstrap_operation(profile(require_private=False), WORKSPACE, "status")
     value = raw_observe()
     value.update(summary)
     value["closure_valid"] = summary["integrity_verified"] is True

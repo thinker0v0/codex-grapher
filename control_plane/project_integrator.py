@@ -352,11 +352,15 @@ class ProjectIntegrator:
             raise PermissionError("candidate bundle changed after preflight")
         reference = f"refs/ai-ops/candidates/{candidate.task_id}/{candidate.candidate_sha}"
         subprocess.run(
-            ["git", "-C", str(self.repo), "fetch", str(candidate.bundle_path), f"HEAD:{reference}"],
+            ["git", "-C", str(self.repo), "-c", "core.fsync=all",
+             "-c", "core.fsyncMethod=fsync", "fetch", "--no-auto-maintenance",
+             str(candidate.bundle_path), f"HEAD:{reference}"],
             check=True, capture_output=True, text=True,
+            env={key: value for key, value in os.environ.items() if key != "GIT_TEST_FSYNC"},
         )
         if git(self.repo, "rev-parse", f"{reference}^{{commit}}") != candidate.candidate_sha:
             raise PermissionError("imported bundle does not match candidate SHA")
+        self._durable_canonical()
         return candidate.candidate_sha
 
     def promote(
@@ -410,6 +414,9 @@ class ProjectIntegrator:
         publication = self.publications.ensure(
             self.repo, current["repo"], candidate_sha, metadata
         )
+        # Direct promotion may use objects created without import_bundle().
+        # Persist their closure before any accepted ref can point to them.
+        self._durable_canonical()
         if fault_hook:
             fault_hook("after_publication")
         if fault_hook:
@@ -425,6 +432,10 @@ class ProjectIntegrator:
             raise RuntimeError("rollback reference conflict")
         if accepted_sha == expected_base_sha:
             self._update_ref(self.accepted_ref, candidate_sha, expected_base_sha)
+        # Git's ref-file fsync precedes its rename; persist the directory
+        # entries too, before either the crash hook or durable binding moves.
+        # Run even when a previous process already wrote the expected refs.
+        self._durable_canonical()
         if fault_hook:
             fault_hook("after_ref")
         # Retain the historical hook name for fault-injection compatibility.
@@ -466,6 +477,7 @@ class ProjectIntegrator:
             if git(self.repo, "rev-parse", f"{candidate_sha}^{{commit}}") != candidate_sha:
                 raise RuntimeError("accepted candidate object is absent during recovery")
             self.publications.ensure(self.repo, binding["repo"], candidate_sha, metadata)
+            self._durable_canonical()
             if binding["base_sha"] == expected_base_sha:
                 self._atomic_write({"repo": binding["repo"], "base_sha": candidate_sha}, metadata)
             return candidate_sha
@@ -505,10 +517,12 @@ class ProjectIntegrator:
             publication = self.publications.ensure(
                 self.repo, current["repo"], previous_sha, metadata
             )
+            self._durable_canonical()
             if fault_hook:
                 fault_hook("before_rollback_ref")
             if accepted_sha == expected_current_sha:
                 self._update_ref(self.accepted_ref, previous_sha, expected_current_sha)
+            self._durable_canonical()
             if fault_hook:
                 fault_hook("after_rollback_ref")
             if current["base_sha"] == expected_current_sha:
@@ -531,9 +545,13 @@ class ProjectIntegrator:
             accepted_sha = self._ref_sha(self.accepted_ref)
             if accepted_sha not in {None, binding["base_sha"]}:
                 raise RuntimeError("accepted ref and worker binding disagree")
-            return self.publications.ensure(
+            publication = self.publications.ensure(
                 self.repo, binding["repo"], binding["base_sha"], metadata
             )
+            # Initial canonical snapshots are copied by the controller, not
+            # written by Git, so Git's fsync options cannot persist them.
+            self._durable_canonical(include_worktree=True)
+            return publication
 
     def _validate_candidate(self, candidate_sha: str, expected_base_sha: str, allowed_paths: list[str]) -> None:
         if not HEX40.fullmatch(candidate_sha) or not HEX40.fullmatch(expected_base_sha):
@@ -639,9 +657,89 @@ class ProjectIntegrator:
 
     def _update_ref(self, reference: str, new_sha: str, old_sha: str | None) -> None:
         ProjectIntegrator._require_mutation_authority(self)
-        command = ["git", "-C", str(self.repo), "update-ref", reference, new_sha]
+        command = ["git", "-C", str(self.repo), "-c", "core.fsync=all",
+                   "-c", "core.fsyncMethod=fsync", "update-ref", reference, new_sha]
         command.append(old_sha if old_sha is not None else "0" * 40)
-        subprocess.run(command, check=True, capture_output=True, text=True)
+        subprocess.run(
+            command, check=True, capture_output=True, text=True,
+            env={key: value for key, value in os.environ.items() if key != "GIT_TEST_FSYNC"},
+        )
+        # In particular, the saved rollback ref must be durable before the
+        # next CAS can advance the accepted ref to the candidate.
+        self._durable_canonical()
+
+    def _durable_canonical(self, *, include_worktree: bool = False) -> None:
+        """Flush the owned Git closure before acknowledging publication effects.
+
+        Git 2.47's files backend can fsync a reference lock before renaming it,
+        but does not fsync the containing directories. Flush all metadata and
+        objects (loose or packed), then directories from leaves to root. The
+        controller's existing exclusive writer barriers exclude other writers.
+        A failure propagates before the binding or publication journal advances.
+
+        Descriptor-relative traversal never follows links or opens special
+        files. Worktree symlinks, supported by legacy repositories, are skipped;
+        only their directory entries are flushed. Git metadata may have none.
+        """
+        ProjectIntegrator._require_mutation_authority(self)
+        directory_flags = os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW | os.O_CLOEXEC
+        file_flags = os.O_RDONLY | os.O_NOFOLLOW | os.O_CLOEXEC | os.O_NONBLOCK
+        owner = os.geteuid()
+
+        def validate(metadata: os.stat_result, *, directory: bool) -> None:
+            expected_type = stat.S_ISDIR if directory else stat.S_ISREG
+            if not expected_type(metadata.st_mode) or metadata.st_uid != owner:
+                raise PermissionError("canonical durability requires controller-owned regular files and directories")
+
+        def flush(directory: int, *, git_metadata: bool) -> None:
+            validate(os.fstat(directory), directory=True)
+            for name in sorted(os.listdir(directory)):
+                before = os.stat(name, dir_fd=directory, follow_symlinks=False)
+                if stat.S_ISLNK(before.st_mode) and not git_metadata and name != ".git":
+                    continue
+                is_directory = stat.S_ISDIR(before.st_mode)
+                validate(before, directory=is_directory)
+                descriptor = os.open(
+                    name, directory_flags if is_directory else file_flags,
+                    dir_fd=directory,
+                )
+                try:
+                    after = os.fstat(descriptor)
+                    validate(after, directory=is_directory)
+                    if (before.st_dev, before.st_ino) != (after.st_dev, after.st_ino):
+                        raise RuntimeError("canonical entry changed during durability barrier")
+                    if is_directory:
+                        flush(descriptor, git_metadata=git_metadata or name == ".git")
+                    else:
+                        os.fsync(descriptor)
+                finally:
+                    os.close(descriptor)
+            os.fsync(directory)
+
+        repository = os.open(self.repo, directory_flags)
+        try:
+            validate(os.fstat(repository), directory=True)
+            # A linked worktree/gitdir pointer is never a self-contained
+            # canonical repository, including during initial materialization.
+            git_directory = os.open(".git", directory_flags, dir_fd=repository)
+            try:
+                validate(os.fstat(git_directory), directory=True)
+                if include_worktree:
+                    flush(repository, git_metadata=False)
+                else:
+                    flush(git_directory, git_metadata=True)
+            finally:
+                os.close(git_directory)
+            if not include_worktree:
+                os.fsync(repository)
+        finally:
+            os.close(repository)
+        # Also persist a newly created canonical directory itself (initialization).
+        parent = os.open(self.repo.parent, directory_flags)
+        try:
+            os.fsync(parent)
+        finally:
+            os.close(parent)
 
     def _rollback_ref(self, candidate_sha: str) -> str:
         return f"refs/ai-ops/rollback/{self.project}/{candidate_sha}"

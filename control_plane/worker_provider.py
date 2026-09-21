@@ -314,6 +314,7 @@ def parse_codex_jsonl(output: bytes, *, _diagnostic_state: dict | None = None) -
     terminal = None
     messages: list[str] = []
     message_lines: list[int] = []
+    message_ids: set[str] = set()
     usage = None
     observed_model = None
     provider_error = False
@@ -368,6 +369,12 @@ def parse_codex_jsonl(output: bytes, *, _diagnostic_state: dict | None = None) -
             if kind == "item.completed" and item["type"] == "agent_message":
                 if set(item) - {"id", "type", "text"}:
                     raise ValueError("unsupported agent message fields")
+                identifier = item.get("id")
+                if not isinstance(identifier, str) or not SAFE_ID.fullmatch(identifier):
+                    raise ValueError("invalid agent message identifier")
+                if identifier in message_ids:
+                    raise ValueError("duplicate completed agent message identifier")
+                message_ids.add(identifier)
                 if not isinstance(item.get("text"), str):
                     raise ValueError("invalid agent message")
                 messages.append(item["text"])
@@ -378,25 +385,30 @@ def parse_codex_jsonl(output: bytes, *, _diagnostic_state: dict | None = None) -
         raise ValueError("missing provider terminal")
     completion = "PROVIDER_FAILED"
     if not provider_error:
-        # Commentary may precede the single schema-valid final message. Earlier
-        # schema-valid results are contradictory and never silently overwritten.
-        results = []
-        for message_index, text in enumerate(messages):
+        if not messages:
+            raise ValueError("missing structured worker result")
+        if _diagnostic_state is not None:
+            _diagnostic_state["line"] = message_lines[-1]
+        # Codex 0.155.1 selects the last completed AgentMessage as its final
+        # response. Its output schema also shapes earlier progress messages;
+        # pending tool completions may follow the final message before terminal.
+        completion = _result(strict_loads(messages[-1]))
+        # Additional Grapher strictness: an earlier schema-shaped message must
+        # be valid and agree with the final status. Plain commentary is allowed.
+        for message_index, text in enumerate(messages[:-1]):
             if _diagnostic_state is not None:
                 _diagnostic_state["line"] = message_lines[message_index]
             try:
                 decoded = strict_loads(text)
             except (UnicodeError, ValueError):
+                # A malformed object cannot hide a conflicting structured
+                # result behind duplicate keys, nonfinite values or truncation.
+                if text.lstrip().startswith("{"):
+                    raise
                 continue
             if isinstance(decoded, dict) and "schema_version" in decoded:
-                results.append(_result(decoded))
-        if len(results) != 1 or not messages:
-            raise ValueError("missing or duplicate structured worker result")
-        if _diagnostic_state is not None:
-            _diagnostic_state["line"] = message_lines[-1]
-        if _result(strict_loads(messages[-1])) != results[0]:
-            raise ValueError("structured result must be the final message")
-        completion = results[0]
+                if _result(decoded) != completion:
+                    raise ValueError("conflicting structured worker results")
     return {"completion": completion, "session_id": session,
             "usage_observed": usage, "model": observed_model}
 
@@ -421,10 +433,12 @@ _DIAGNOSTIC_REASONS = {
     "invalid provider item": "ITEM_INVALID",
     "unsupported agent message fields": "AGENT_FIELDS_UNSUPPORTED",
     "invalid agent message": "AGENT_MESSAGE_INVALID",
+    "invalid agent message identifier": "AGENT_ID_INVALID",
+    "duplicate completed agent message identifier": "AGENT_ID_DUPLICATE",
     "unsupported provider event": "EVENT_UNSUPPORTED",
     "missing provider terminal": "TERMINAL_MISSING",
-    "missing or duplicate structured worker result": "STRUCTURED_RESULT_COUNT_INVALID",
-    "structured result must be the final message": "STRUCTURED_RESULT_NOT_FINAL",
+    "missing structured worker result": "STRUCTURED_RESULT_MISSING",
+    "conflicting structured worker results": "STRUCTURED_RESULT_CONFLICT",
     "unknown final result": "STRUCTURED_RESULT_STATUS_INVALID",
     "invalid result summary": "STRUCTURED_RESULT_SUMMARY_INVALID",
 }

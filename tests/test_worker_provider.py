@@ -58,7 +58,7 @@ class ProtocolTests(unittest.TestCase):
         values[2:2] = [
             {"type": "item.completed", "item": {"type": "command_execution", "exit_code": 1,
              "aggregated_output": "permission denied", "status": "failed"}},
-            {"type": "item.completed", "item": {"type": "agent_message", "text": "Repairing the failure."}},
+            {"type": "item.completed", "item": {"id": "progress_0", "type": "agent_message", "text": "Repairing the failure."}},
         ]
         self.assertEqual(provider.parse_codex_jsonl(stream(values))["completion"], "COMPLETED")
 
@@ -125,7 +125,7 @@ class ProtocolTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             provider.parse_codex_jsonl(stream(values))
         values = events()
-        values.insert(3, {"type": "item.completed", "item": {"type": "agent_message", "text": "I refuse."}})
+        values.insert(3, {"type": "item.completed", "item": {"id": "final_1", "type": "agent_message", "text": "I refuse."}})
         with self.assertRaises(ValueError):
             provider.parse_codex_jsonl(stream(values))
 
@@ -143,6 +143,87 @@ class ProtocolTests(unittest.TestCase):
         values[0]["model"] = "another-model"
         with self.assertRaises(ValueError):
             provider.parse_codex_jsonl(stream(values))
+
+
+class NativeFinalMessageTests(unittest.TestCase):
+    """Synthetic shapes derived from the observed native stream, never its text."""
+
+    def message(self, identifier, status="completed", text=None):
+        return {"type": "item.completed", "item": {"id": identifier, "type": "agent_message",
+            "text": text if text is not None else json.dumps({"schema_version": 1,
+                "status": status, "summary": "Synthetic message."})}}
+
+    def test_seven_distinct_schema_shaped_messages_are_one_turn_result(self):
+        values = events()[:2]
+        for index in range(7):
+            values.append(self.message(f"message_{index}"))
+            if index < 6:
+                values.append({"type": "item.completed", "item": {
+                    "id": f"tool_{index}", "type": "command_execution", "status": "completed", "exit_code": 0}})
+        values.append(events()[-1])
+        self.assertEqual(provider.parse_codex_jsonl(stream(values))["completion"], "COMPLETED")
+
+    def test_final_agent_message_need_not_immediately_precede_terminal(self):
+        values = events()
+        values.insert(3, {"type": "item.completed", "item": {
+            "id": "pending_tool", "type": "command_execution", "status": "completed", "exit_code": 0}})
+        self.assertEqual(provider.parse_codex_jsonl(stream(values))["completion"], "COMPLETED")
+
+    def test_same_status_progress_preserves_final_non_success_status(self):
+        for status, expected in (("refused", "REFUSED"), ("blocked", "BLOCKED"), ("failed", "PROVIDER_FAILED")):
+            values = events(status)
+            values.insert(2, self.message("progress", status))
+            with self.subTest(status=status):
+                self.assertEqual(provider.parse_codex_jsonl(stream(values))["completion"], expected)
+
+    def test_conflicting_earlier_structured_status_never_succeeds(self):
+        for earlier, final in (("refused", "completed"), ("blocked", "completed"),
+                               ("failed", "completed"), ("completed", "refused")):
+            values = events(final)
+            values.insert(2, self.message("progress", earlier))
+            with self.subTest(earlier=earlier, final=final), self.assertRaisesRegex(ValueError, "conflicting structured"):
+                provider.parse_codex_jsonl(stream(values))
+
+    def test_earlier_malformed_schema_remains_rejected_but_plain_commentary_allowed(self):
+        for text in ('{"schema_version":1,"status":"completed"}',
+                     '{"schema_version":true,"status":"completed","summary":"synthetic"}',
+                     '{"schema_version":1,"status":"completed","summary":"synthetic","extra":1}',
+                     '{"schema_version":1,"status":"refused","status":"completed","summary":"synthetic"}',
+                     '{"schema_version":1,"status":"blocked","summary":"synthetic","extra":NaN}',
+                     '  {"schema_version":1,"status":"blocked"'):
+            values = events(); values.insert(2, self.message("progress", text=text))
+            with self.subTest(text=text), self.assertRaises(ValueError):
+                provider.parse_codex_jsonl(stream(values))
+        values = events(); values.insert(2, self.message("progress", text="Synthetic plain progress."))
+        self.assertEqual(provider.parse_codex_jsonl(stream(values))["completion"], "COMPLETED")
+
+    def test_final_message_is_selected_before_schema_validation(self):
+        for text in ("Synthetic final prose.", "{}", '{"schema_version":1,"status":"completed"}'):
+            values = events(); values.insert(3, self.message("last", text=text))
+            with self.subTest(text=text), self.assertRaises(ValueError):
+                provider.parse_codex_jsonl(stream(values))
+
+    def test_missing_invalid_or_replayed_agent_identifiers_are_rejected(self):
+        for identifier in (None, True, "", "bad identifier", "x" * 201):
+            values = events(); values[2]["item"]["id"] = identifier
+            with self.subTest(identifier=identifier), self.assertRaisesRegex(ValueError, "invalid agent message identifier"):
+                provider.parse_codex_jsonl(stream(values))
+        values = events(); del values[2]["item"]["id"]
+        with self.assertRaisesRegex(ValueError, "invalid agent message identifier"):
+            provider.parse_codex_jsonl(stream(values))
+        values = events(); values.insert(2, copy.deepcopy(values[2]))
+        with self.assertRaisesRegex(ValueError, "duplicate completed agent message identifier"):
+            provider.parse_codex_jsonl(stream(values))
+
+    def test_no_agent_message_and_explicit_refusal_error_or_duplicate_terminal_still_fail(self):
+        with self.assertRaisesRegex(ValueError, "missing structured worker result"):
+            provider.parse_codex_jsonl(stream(events()[:2] + events()[-1:]))
+        for kind in ("error", "refusal"):
+            values = events(); values.insert(2, {"type": "item.completed", "item": {"id": "negative", "type": kind}})
+            with self.subTest(kind=kind):
+                self.assertEqual(provider.parse_codex_jsonl(stream(values))["completion"], "PROVIDER_FAILED")
+        with self.assertRaisesRegex(ValueError, "provider event after terminal"):
+            provider.parse_codex_jsonl(stream(events() + [events()[-1]]))
 
 
 class ProviderBoundaryFixtures(unittest.TestCase):

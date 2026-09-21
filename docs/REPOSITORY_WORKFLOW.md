@@ -191,6 +191,14 @@ provider authentication or prove role isolation. The current provider adapter
 accepts Codex CLI `0.155.1` with model `gpt-5.6-sol`, reasoning `medium` and service
 tier `default`; another explicit profile setting is not automatically supported.
 
+The adapter requires one successful terminal turn and validates the last
+completed agent message as the structured worker result, matching the pinned
+CLI's final-message selection. Earlier messages may use the same JSON schema;
+the adapter additionally rejects conflicting statuses, malformed schema-shaped
+results, repeated message IDs, explicit provider errors and events after the
+terminal. A successful provider response still needs the independent checks and
+signed acceptance below.
+
 `run` may invoke your existing Codex subscription. Review the objective, allowed
 paths, required tests, independent checks, model and limits first. The example
 allows one invocation and a 300-second worker timeout. Subscription login does
@@ -215,6 +223,11 @@ boundaries during an explicitly bounded run.
 "$CG_PYTHON" -I -B -m control_plane recover --workspace "$CG_WORKSPACE" --json
 "$CG_PYTHON" -I -B -m control_plane rollback --workspace "$CG_WORKSPACE" --json
 ```
+
+Publication flushes canonical Git objects, references and their directory entries
+before advancing the accepted binding. Flush failures leave the operation
+incomplete for explicit recovery; a visible Git reference alone is not treated
+as durable completion. Published generations are flushed separately.
 
 Rollback is an explicit publication change. It must identify the authorized
 predecessor of the current accepted attempt. Repeated recovery must not add a
