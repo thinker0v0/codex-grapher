@@ -348,6 +348,35 @@ def verify(profile, taskroot):
     return result
 
 
+def source_provenance():
+    """Hash the imported package, even when the wheel stores this script in share/."""
+    from control_plane import execution_profile, isolated_runner, sealed_protocol
+    sources = {
+        "scripts/verify-role-isolation.py": Path(__file__).resolve(strict=True),
+        "control_plane/isolated_runner.py": Path(isolated_runner.__file__).resolve(strict=True),
+        "control_plane/execution_profile.py": Path(execution_profile.__file__).resolve(strict=True),
+        "control_plane/sealed_protocol.py": Path(sealed_protocol.__file__).resolve(strict=True),
+    }
+    evidence = {"source_sha256": {label: sha(path.read_bytes()) for label, path in sources.items()},
+                "source_paths": {label: str(path) for label, path in sources.items()}, "git_sha": None}
+    # A nearby/unrelated repository says nothing about an installed wheel. Only
+    # report Git identity when every actual source is in this exact checkout.
+    if all(path == ROOT / label for label, path in sources.items()):
+        try:
+            lines = subprocess.check_output(
+                ["git", "-C", str(ROOT), "-c", "core.fsmonitor=false", "-c", "core.hooksPath=/dev/null",
+                 "rev-parse", "--show-toplevel", "HEAD"], timeout=5,
+                env={"PATH": "/usr/bin:/bin", "HOME": "/nonexistent", "GIT_CONFIG_NOSYSTEM": "1",
+                     "GIT_CONFIG_GLOBAL": "/dev/null", "GIT_OPTIONAL_LOCKS": "0"},
+                stderr=subprocess.DEVNULL).decode().splitlines()
+            if (len(lines) == 2 and Path(lines[0]).resolve(strict=True) == ROOT
+                    and len(lines[1]) in {40, 64} and all(character in "0123456789abcdef" for character in lines[1])):
+                evidence["git_sha"] = lines[1]
+        except (OSError, subprocess.SubprocessError, UnicodeError):
+            pass
+    return evidence
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--profile", required=True, type=Path)
@@ -359,16 +388,9 @@ def main():
                 "remaining_unproven": ["HG07 end-to-end provider, required tests and independent signing acceptance",
                                        "actual operator key isolation and provider authentication store boundary",
                                        "guest recovery and release gates"],
-                "source_sha256": {str(path.relative_to(ROOT)): sha(path.read_bytes()) for path in
-                    (Path(__file__).resolve(), ROOT / "control_plane/isolated_runner.py",
-                     ROOT / "control_plane/execution_profile.py", ROOT / "control_plane/sealed_protocol.py")}}
+                "git_sha": None}
     try:
-        evidence["git_sha"] = subprocess.check_output(
-            ["git", "-C", str(ROOT), "rev-parse", "HEAD"], timeout=5,
-            env={"PATH": "/usr/bin:/bin", "HOME": "/nonexistent"}, stderr=subprocess.DEVNULL).decode().strip()
-    except (OSError, subprocess.SubprocessError):
-        evidence["git_sha"] = None
-    try:
+        evidence.update(source_provenance())
         if os.geteuid() != 0:
             raise PermissionError("root is required; no role-isolation evidence was collected")
         profile = load_execution_profile(args.profile)

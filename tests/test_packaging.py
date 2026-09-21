@@ -1,5 +1,6 @@
 """Build and install the public source archive without network or host writes."""
 
+import hashlib
 import json
 import os
 from pathlib import Path
@@ -105,6 +106,49 @@ class SourceDistributionTests(unittest.TestCase):
                              "scripts/provision-sqlite-runtime.sh"):
                 self.assertTrue((resources / relative).is_file(), relative)
             self.assertFalse((installed / "control_plane/local_private.py").exists())
+            # The installed script and imported modules occupy separate trees.
+            # An unrelated Git repository at the share root must not supply a
+            # misleading source SHA for modules imported from site-packages.
+            probe = resources / "scripts/verify-role-isolation.py"
+            self.assertTrue(probe.is_file())
+            self.assertFalse((resources / "control_plane").exists())
+            git_environment = {"PATH": "/usr/bin:/bin", "HOME": str(outside),
+                               "GIT_CONFIG_NOSYSTEM": "1", "GIT_CONFIG_GLOBAL": "/dev/null"}
+            run(["git", "-C", str(resources), "-c", "init.templateDir=", "init", "--quiet"],
+                cwd=outside, env=git_environment)
+            run(["git", "-C", str(resources), "-c", "core.hooksPath=/dev/null",
+                 "-c", "user.name=Packaging Fixture", "-c", "user.email=fixture@example.invalid",
+                 "commit", "--allow-empty", "--quiet", "-m", "unrelated installation fixture"],
+                cwd=outside, env=git_environment)
+            role_evidence = outside / "installed-role-evidence.json"
+            probe_result = subprocess.run(
+                [sys.executable, "-I", "-B", "-c",
+                 "import runpy,sys; site,script=sys.argv[1:3]; "
+                 "sys.path.insert(0,site); sys.argv=sys.argv[2:]; "
+                 "runpy.run_path(script,run_name='__main__')",
+                 str(installed), str(probe), "--profile", str(outside / "missing-profile.json"),
+                 "--output", str(role_evidence)],
+                cwd=outside, env=environment, capture_output=True, text=True, timeout=30,
+            )
+            self.assertEqual(probe_result.returncode, 1, probe_result.stdout + probe_result.stderr)
+            self.assertNotIn("Traceback", probe_result.stderr)
+            self.assertTrue(role_evidence.is_file(), probe_result.stdout + probe_result.stderr)
+            provenance = json.loads(role_evidence.read_bytes())
+            self.assertEqual(provenance["result"], "UNPROVEN")
+            self.assertIn("error", provenance)
+            self.assertNotIn("roles", provenance)
+            self.assertIsNone(provenance["git_sha"])
+            expected_sources = {"scripts/verify-role-isolation.py": probe,
+                **{"control_plane/" + name: installed / "control_plane" / name for name in
+                   ("isolated_runner.py", "execution_profile.py", "sealed_protocol.py")}}
+            self.assertEqual(set(provenance["source_paths"]), set(expected_sources))
+            self.assertEqual(set(provenance["source_sha256"]), set(expected_sources))
+            for label, actual in expected_sources.items():
+                self.assertEqual(provenance["source_paths"][label], str(actual.resolve()))
+                self.assertEqual(provenance["source_sha256"][label], hashlib.sha256(actual.read_bytes()).hexdigest())
+            summary = json.loads(probe_result.stdout)
+            self.assertEqual(summary["result"], "UNPROVEN")
+            self.assertEqual(summary["sha256"], hashlib.sha256(role_evidence.read_bytes()).hexdigest())
             runtime_environment = {**environment, "PYTHONPATH": str(installed)}
             result = run([str(installed / "bin/codex-grapher"), "doctor", "--json"],
                          cwd=outside, env=runtime_environment)
