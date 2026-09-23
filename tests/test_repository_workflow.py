@@ -241,7 +241,9 @@ class RepositoryWorkflowTests(unittest.TestCase):
     def test_changed_frozen_checks_reject_before_database_effects(self):
         self.initialize()
         before = (self.root / "state/graph.sqlite").read_bytes()
-        (self.root / "frozen/checks.json").write_text("{}")
+        checks = self.root / "frozen/checks.json"
+        checks.chmod(0o600)
+        checks.write_text("{}")
         with self.assertRaisesRegex(workflow.RepositoryWorkflowError, "CONFIG_CHANGED"):
             workflow.run_repository_workflow(self.root)
         self.assertEqual(before, (self.root / "state/graph.sqlite").read_bytes())

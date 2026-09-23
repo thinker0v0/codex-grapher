@@ -48,6 +48,7 @@ class HistoricalReceiptRecoveryTests(unittest.TestCase):
         if delete:
             loose.unlink()
         else:
+            loose.chmod(0o600)
             loose.write_bytes(b"")
         with patch("control_plane.worker_provider.provider_preflight", side_effect=AssertionError("recovery relaunched provider")), \
              patch("control_plane.worker_provider.launch_worker", side_effect=AssertionError("recovery relaunched worker")), \
