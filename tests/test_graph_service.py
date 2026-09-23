@@ -1,22 +1,30 @@
 import tempfile
 import unittest
 import concurrent.futures
+import datetime as dt
 import hashlib
 import json
 import os
 import subprocess
+import socket
+import threading
+import time
 from pathlib import Path
+from types import SimpleNamespace
+from unittest.mock import patch
 
 from control_plane.graph_planner import load_templates
 from control_plane.graph_bootstrap import apply_database
 from control_plane.graph_service import (
     build_coordinators,
     dispatch,
+    handle,
     reconcile_startup,
 )
 from control_plane.project_graph import ProjectGraph
 from control_plane.project_coordinator import ProjectCoordinator
 from control_plane.project_integrator import ProjectIntegrator
+from control_plane.graph_transport import MAX_RESPONSE, receive_frame
 from tests.evaluation_helpers import generate_keypair, make_evaluation
 
 
@@ -43,6 +51,7 @@ class GraphServiceTests(unittest.TestCase):
             "objective":"deliver verified finance research", "accepted_sha":SHA})
 
     def tearDown(self):
+        self.graph.connection.close()
         self.temp.cleanup()
 
     def test_planner_can_create_and_project_builder_can_lease(self):
@@ -54,9 +63,10 @@ class GraphServiceTests(unittest.TestCase):
             "action": "lease", "node_id": self.nodes[0], "version": 0,
         })
         self.graph.recover_leases(force_startup=True)
-        second = dispatch(self.graph, self.templates, "hermes-fin-korea", {
-            "action": "lease", "node_id": self.nodes[0], "version": 2,
-        })
+        with patch("control_plane.project_graph.utc_now", return_value=dt.datetime.now(dt.timezone.utc) + dt.timedelta(seconds=10)):
+            second = dispatch(self.graph, self.templates, "hermes-fin-korea", {
+                "action": "lease", "node_id": self.nodes[0], "version": 2,
+            })
         running = dispatch(self.graph, self.templates, "hermes-fin-korea", {
             "action": "start", "node_id": self.nodes[0], "version": second["version"],
             "lease_id": second["lease_id"],
@@ -99,11 +109,114 @@ class GraphServiceTests(unittest.TestCase):
         with self.assertRaises(PermissionError):
             dispatch(self.graph, self.templates, "hermes-evaluator", {"action":"recover"})
 
+    def test_builder_heartbeat_renews_only_exact_live_lease(self):
+        node_id = self.nodes[0]
+        leased = dispatch(self.graph, self.templates, "hermes-fin-korea", {
+            "action": "lease", "node_id": node_id, "version": 0, "ttl_seconds": 10,
+        })
+        request = {"action": "heartbeat", "node_id": node_id, "lease_id": leased["lease_id"], "ttl_seconds": 300}
+        renewed = dispatch(self.graph, self.templates, "hermes-fin-korea", request)
+        self.assertEqual(renewed["version"], leased["version"])
+        self.assertEqual(renewed["attempt"], leased["attempt"])
+        self.assertGreater(renewed["lease_expires_at"], leased["lease_expires_at"])
+        running = dispatch(self.graph, self.templates, "hermes-fin-korea", {
+            "action": "start", "node_id": node_id, "version": renewed["version"], "lease_id": renewed["lease_id"],
+        })
+        self.assertEqual(dispatch(self.graph, self.templates, "hermes-fin-korea", request)["state"], "RUNNING")
+        for username in ("root", "hermes-evaluator", "hermes-business", "hermes-oss"):
+            before = self.graph.get_node(node_id)
+            with self.subTest(username=username), self.assertRaises(PermissionError):
+                dispatch(self.graph, self.templates, username, request)
+            self.assertEqual(self.graph.get_node(node_id), before)
+        before = self.graph.get_node(node_id)
+        with self.assertRaises(PermissionError):
+            dispatch(self.graph, self.templates, "hermes-fin-korea", {**request, "lease_id": "wrong"})
+        for ttl in (True, "300", 300.5, 0, 3601):
+            with self.subTest(ttl=ttl), self.assertRaises(ValueError):
+                dispatch(self.graph, self.templates, "hermes-fin-korea", {**request, "ttl_seconds": ttl})
+        self.assertEqual(self.graph.get_node(node_id), before)
+        self.assertEqual(running["version"], before["version"])
+
+    def test_socket_worker_heartbeat_uses_peer_identity_and_persisted_lease(self):
+        leased = dispatch(self.graph, self.templates, "hermes-fin-korea", {
+            "action": "lease", "node_id": self.nodes[0], "version": 0, "ttl_seconds": 10,
+        })
+        request = {"action": "heartbeat", "node_id": self.nodes[0], "lease_id": leased["lease_id"], "ttl_seconds": 300}
+        for username, allowed in (("hermes-fin-korea", True), ("hermes-business", False), ("root", False)):
+            server, client = socket.socketpair()
+            with client:
+                # Socketpair exercises the real handler; only the local UID-name
+                # mapping is a fixture. No OS identity separation is claimed.
+                client.sendall((json.dumps(request) + "\n").encode())
+                with patch("control_plane.graph_service.pwd.getpwuid", return_value=SimpleNamespace(pw_name=username)):
+                    handle(server, self.graph, self.templates, {}, {}, threading.RLock())
+                response = receive_frame(client, time.monotonic() + 1, MAX_RESPONSE)
+                self.assertEqual(response["ok"], allowed)
+                if allowed:
+                    self.assertEqual(response["result"]["lease_id"], leased["lease_id"])
+                    self.assertGreater(response["result"]["lease_expires_at"], leased["lease_expires_at"])
+
+    def test_expired_heartbeat_is_denied_without_mutation(self):
+        leased = dispatch(self.graph, self.templates, "hermes-fin-korea", {
+            "action": "lease", "node_id": self.nodes[0], "version": 0,
+        })
+        self.graph.connection.execute(
+            "UPDATE nodes SET lease_expires_at=? WHERE node_id=?",
+            ((dt.datetime.now(dt.timezone.utc) - dt.timedelta(seconds=1)).isoformat(), self.nodes[0]),
+        )
+        before = self.graph.get_node(self.nodes[0])
+        with self.assertRaises(PermissionError):
+            dispatch(self.graph, self.templates, "hermes-fin-korea", {
+                "action": "heartbeat", "node_id": self.nodes[0], "lease_id": leased["lease_id"],
+            })
+        self.assertEqual(self.graph.get_node(self.nodes[0]), before)
+
+    def test_node_detail_resumes_builder_without_cross_route_capability_leak(self):
+        leased = dispatch(self.graph, self.templates, "hermes-fin-korea", {
+            "action": "lease", "node_id": self.nodes[0], "version": 0,
+        })
+        request = {"action": "node", "node_id": self.nodes[0]}
+        own = dispatch(self.graph, self.templates, "hermes-fin-korea", request)
+        self.assertEqual(own["version"], leased["version"])
+        self.assertEqual(own["lease_id"], leased["lease_id"])
+        for username in ("hermes-oss", "hermes-business", "hermes-hynix"):
+            with self.subTest(username=username), self.assertRaises(PermissionError):
+                dispatch(self.graph, self.templates, username, request)
+        for username in ("root", "hermes-evaluator"):
+            detail = dispatch(self.graph, self.templates, username, request)
+            self.assertEqual(detail["version"], leased["version"])
+            self.assertNotIn("lease_id", detail)
+        self.assertNotIn(leased["lease_id"], json.dumps(dispatch(
+            self.graph, self.templates, "hermes-oss", {"action": "status"},
+        )))
+
+    def test_authority_numbers_and_force_flag_require_exact_types(self):
+        before = self.graph.get_node(self.nodes[0])
+        for ttl in (True, "300", 300.0, 9, 3601, None):
+            with self.subTest(ttl=ttl), self.assertRaises(ValueError):
+                dispatch(self.graph, self.templates, "hermes-fin-korea", {
+                    "action": "lease", "node_id": self.nodes[0], "version": 0, "ttl_seconds": ttl,
+                })
+        for version in (False, "0", 0.0, -1):
+            with self.subTest(version=version), self.assertRaises(ValueError):
+                dispatch(self.graph, self.templates, "hermes-fin-korea", {
+                    "action": "lease", "node_id": self.nodes[0], "version": version,
+                })
+        with self.assertRaises(ValueError):
+            dispatch(self.graph, self.templates, "root", {"action": "recover", "force_startup": "false"})
+        for returncode in (False, "0", 0.0):
+            with self.subTest(returncode=returncode), self.assertRaises(ValueError):
+                dispatch(self.graph, self.templates, "hermes-fin-korea", {
+                    "action": "reconcile", "node_id": self.nodes[0], "version": 0, "returncode": returncode,
+                })
+        self.assertEqual(self.graph.get_node(self.nodes[0]), before)
+
     def test_cross_thread_database_mode_supports_service_workers(self):
         self.graph.connection.close()
         database = Path(self.temp.name) / "threaded.db"
         apply_database(database)
         graph = ProjectGraph(database, allow_cross_thread=True)
+        self.addCleanup(graph.connection.close)
         dispatch(graph, self.templates, "hermes-oss", {"action":"create_goal", "goal_id":"threaded-goal",
                  "project":"opensource", "objective":"deliver verified threaded service", "accepted_sha":SHA})
         with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:

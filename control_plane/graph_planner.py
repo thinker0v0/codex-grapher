@@ -17,6 +17,8 @@ def load_templates(path: Path) -> dict[str, list[dict[str, Any]]]:
         if not nodes or len({node["kind"] for node in nodes}) != len(nodes):
             raise ValueError(f"{project} has empty or duplicate stages")
         for node in nodes:
+            if "human_gate" in node and type(node["human_gate"]) is not bool:
+                raise ValueError("template human_gate must be a boolean")
             if not node.get("write_set") or not node.get("acceptance"):
                 raise ValueError(f"{project}/{node.get('kind')} lacks executable contract")
     return value
@@ -33,8 +35,10 @@ def plan_goal(graph: ProjectGraph, templates: dict[str, list[dict[str, Any]]], g
     for index, template in enumerate(templates[project], 1):
         node_id = f"{goal_id}-{index:02d}-{template['kind'].lower()}"
         spec = {"objective": objective, "acceptance": template["acceptance"],
-                "human_gate": bool(template.get("human_gate", False)), "project": project,
+                "human_gate": template.get("human_gate", False), "project": project,
                 "evaluator_contract_id": f"{node_id}:evaluation:v1"}
+        if graph.evaluation_policy is not None:
+            spec["evaluation_policy_sha256"] = graph.evaluation_policy.sha256
         planned.append({
             "node_id": node_id,
             "kind": template["kind"],

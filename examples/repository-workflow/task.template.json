@@ -1,0 +1,25 @@
+{
+  "schema_version": 1,
+  "project_id": "local-clamp-example",
+  "task_id": "clamp-inclusive-v1",
+  "idempotency_key": "local-clamp-inclusive-v1",
+  "base_sha": "REPLACE_WITH_SEEDED_SOURCE_COMMIT",
+  "objective": "Repair clamp(value, lower, upper) in clamp.py so it returns the value constrained to the inclusive interval [lower, upper].",
+  "acceptance_criteria": [
+    "For finite integer and floating-point inputs with lower <= upper, preserve values inside the interval, including either endpoint.",
+    "Return lower for values below the interval and upper for values above the interval; support negative and equal bounds.",
+    "Raise ValueError when lower > upper.",
+    "Change only clamp.py, preserve the public function signature, and leave the required check unchanged."
+  ],
+  "allowed_paths": ["clamp.py"],
+  "required_tests": ["REPLACE_WITH_PINNED_PYTHON -I -B required_check.py"],
+  "worker": {"backend": "codex"},
+  "limits": {
+    "worker_invocations": 1,
+    "worker_timeout_seconds": 300,
+    "required_test_timeout_seconds": 30,
+    "evaluation_timeout_seconds": 30,
+    "max_output_bytes": 262144
+  },
+  "evaluation": {"policy": "policy.json", "checks": "checks.json"}
+}

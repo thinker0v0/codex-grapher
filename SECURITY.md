@@ -1,8 +1,17 @@
 # Security
 
-This initial experimental snapshot has no production support commitment or
-certified deployment. Its operational release verdict is `NOT_PASS`. Use local
-fixtures without real platform, broker, model, or channel credentials.
+This experimental project has no production support commitment or certified
+deployment. Its broader operational release verdict is `NOT_PASS`. Deterministic
+fixtures use no real platform, model or channel credentials. Real repository
+tasks use the separately configured provider account described in the
+[workflow guide](docs/REPOSITORY_WORKFLOW.md).
+
+The Linux bootstrap is trusted root code. Its four dropped roles protect
+integration state and the signing key from workers and candidate tests. The
+provider's own login is available to its worker identity, including commands
+launched under that identity; isolation from that login is not claimed.
+Candidate-test and signer roles receive no provider authentication. Keep private
+keys and login stores outside repositories, artifacts and workspace backups.
 
 For a sensitive vulnerability, use GitHub's **Security → Report a vulnerability**
 for this repository if the owner has enabled private vulnerability reporting.

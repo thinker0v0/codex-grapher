@@ -37,7 +37,7 @@ installed_library=/usr/local/lib/ai-ops
 installed_bootstrap="$installed_library/control_plane/graph_bootstrap.py"
 graph_state_directory=/var/lib/ai-ops-graph
 graph_database="$graph_state_directory/graphs.sqlite"
-modules=(__init__.py artifact_builder.py graph_state.py graph_schema.py graph_bootstrap.py publication_store.py evidence_ingress.py evidence_store.py project_graph.py project_integrator.py project_coordinator.py graph_planner.py graph_service.py graph_client.py runtime_config.py buzz_router.py buzz_native_adapter.py)
+modules=(__init__.py artifact_builder.py graph_state.py graph_schema.py graph_bootstrap.py sqlite_runtime.py publication_store.py evidence_ingress.py evidence_store.py evaluation_policy.py retry_policy.py project_graph.py project_integrator.py project_coordinator.py graph_planner.py graph_transport.py graph_service.py graph_client.py runtime_config.py buzz_router.py buzz_native_adapter.py)
 required_sources=(
   "$repo_root/config/project-graphs.json"
   "$repo_root/RUBRIC.md"
@@ -111,6 +111,7 @@ for module in "${modules[@]}"; do
 done
 run install -o root -g root -m 0755 "$repo_root/control_plane/graph_service.py" /usr/local/libexec/ai-ops/project-graph-service
 run install -o root -g root -m 0755 "$repo_root/control_plane/graph_client.py" /usr/local/libexec/ai-ops/project-graph-client
+run install -o root -g root -m 0644 "$repo_root/control_plane/graph_transport.py" /usr/local/libexec/ai-ops/graph_transport.py
 run install -o root -g root -m 0644 "$repo_root/config/project-graphs.json" /etc/ai-ops/project-graphs.json
 run install -o root -g root -m 0600 "$runtime_source" /etc/ai-ops/project-runtime.json
 run install -o root -g root -m 0444 "$repo_root/RUBRIC.md" /etc/ai-ops/RUBRIC.md

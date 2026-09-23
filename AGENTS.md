@@ -1,5 +1,15 @@
 # Repository Instructions
 
+> Current cycle: [2026-09-21 portable workers](docs/cycles/20260921-portable-workers/HANDOFF.md).
+> The user authorized generic repository tasks, real Codex subscription execution,
+> OS role separation, disposable guest restart/backup validation and SQLite support,
+> followed by a separate `claude-grapher` repository and OSS publication. Claude
+> live execution is explicitly deferred until the user obtains an account.
+> This supersedes historical NQ restrictions for the authorized cycle. Preserve
+> all legacy rubrics. No production changes, purchases or protected merges are
+> authorized; publication and owner delivery are separate actions, never tests.
+
+
 ## Purpose
 
 This repository defines the control plane for Hermes' native Buzz surface,

@@ -24,6 +24,10 @@ required_files=(
   schemas/evaluation-result.schema.json
   schemas/artifact-manifest.schema.json
   schemas/project-runtime.schema.json
+  schemas/execution-profile.schema.json
+  schemas/repository-task.schema.json
+  schemas/repository-checks.schema.json
+  schemas/worker-result.schema.json
   prompts/hermes/common.md
   prompts/hermes/fin-global.md
   prompts/hermes/fin-korea.md
@@ -51,6 +55,14 @@ required_files=(
   control_plane/evidence_ingress.py
   control_plane/evidence_store.py
   control_plane/runtime_config.py
+  control_plane/repository_workflow.py
+  control_plane/worker_provider.py
+  control_plane/isolated_runner.py
+  control_plane/evaluation_broker.py
+  control_plane/sqlite_runtime.py
+  control_plane/workspace_backup.py
+  control_plane/resources/worker-result.schema.json
+  docs/REPOSITORY_WORKFLOW.md
   config/project-graphs.json
   config/project-runtime.example.json
   deploy/systemd/ai-ops-controller@.service
@@ -76,6 +88,7 @@ bash -n scripts/audit-lightweight-laptop.sh
 bash -n scripts/configure-hermes-credentials.sh
 bash -n scripts/verify-vps-hermes-codex-e2e.sh
 bash -n scripts/verify-project-graph-bootstrap.sh
+bash -n scripts/provision-sqlite-runtime.sh
 python3 control_plane/runtime_config.py config/project-runtime.example.json >/dev/null
 bash scripts/install-project-graph.sh --dry-run --runtime config/project-runtime.example.json >/dev/null
 

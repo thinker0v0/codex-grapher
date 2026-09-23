@@ -455,6 +455,8 @@ class GraphSchemaTests(unittest.TestCase):
     def test_all_extension_tables_migrate_reopen_and_remain_constructor_independent(self):
         from control_plane.buzz_router import BuzzRouter
         from control_plane.project_coordinator import ProjectCoordinator
+        from control_plane.project_integrator import ProjectIntegrator, sha256_file
+        from tests.evaluation_helpers import generate_keypair
 
         path = self.database("repository-v1-extensions.sqlite")
         statements = (
@@ -475,11 +477,18 @@ class GraphSchemaTests(unittest.TestCase):
             "repository-v1-publication-buzz-ingress",
         )
         apply_database(path)
-        graph = ProjectGraph(path)
+        _, public_key = generate_keypair(self.root)
+        rubric = self.root / "rubric.md"
+        rubric.write_text("frozen fixture rubric\n")
+        graph = ProjectGraph(path, public_key, sha256_file(rubric))
         routing = self.root / "routing.json"
         routing.write_text("{}\n")
         BuzzRouter(graph, routing, {})
-        ProjectCoordinator(graph, object())
+        integrator = ProjectIntegrator(
+            self.root, self.root / "binding.json", public_key, rubric,
+            "refs/ai-ops/accepted/opensource",
+        )
+        ProjectCoordinator(graph, integrator)
         self.assertEqual(inspect_schema(graph.connection).status, "current")
         self.assertEqual(
             {row[0] for row in graph.connection.execute(

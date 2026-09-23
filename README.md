@@ -1,98 +1,159 @@
 # Codex Grapher
 
-An experimental Python control plane for durable task graphs, isolated Codex
-work, independent evaluation, and verified Git integration. The local core uses
-SQLite for task state and Git for accepted source state. It is intended to sit
-between a Hermes planner and separate builder, evaluator, and integrator roles.
+A Python control plane for turning worker changes into verified, recoverable Git
+state. Grapher stores task graphs in SQLite, produces immutable test artifacts,
+checks independent evaluator signatures, and promotes accepted commits through a
+recoverable journal.
 
-**Status: experimental local snapshot; operational release `NOT_PASS`.** The
-quickstart runs entirely offline after dependencies are installed. It needs no
-model account, credentials, service, or external API.
+Run tasks against your own clean Git repository through the Codex CLI, inspect
+the resulting evidence, recover interrupted integration, and roll back an
+accepted change. Each task freezes its allowed paths, required tests, independent
+checks, evaluation policy and execution profile before a worker starts.
 
-## Quickstart
+The deterministic demonstration needs no model account. Real repository tasks
+require an existing Codex CLI login and an explicit provider profile.
+**Experimental: the broader Hermes/Buzz operational release remains `NOT_PASS`.**
+Task acceptance and the separately evaluated portable-worker cycle do not
+certify that broader deployment.
 
-Requirements: Linux with `/proc` and pidfd support, Python 3.12 with `venv` and
-pip, Git, Bash, OpenSSL with Ed25519 support, and ripgrep (`rg`). Ubuntu 24.04 is
-the CI target. The local test runner relies on Linux process containment, so
-macOS and Windows are not validated targets. Tests use temporary fixture keys;
-do not supply personal keys.
+## Install
+
+Supported target: Linux with `/proc` and pidfd support, Python 3.12+, Git, Bash,
+and OpenSSL with Ed25519 support. Ubuntu 24.04 / Python 3.12 is the CI target.
+macOS and Windows are not validated. Python runtime dependencies are stdlib only;
+installation needs pip and a build backend. Source/dependency downloads need a
+network connection; the commands below execute locally after installation.
 
 ```bash
 git clone https://github.com/thinker0v0/codex-grapher.git
 cd codex-grapher
-python3.12 -m venv .venv
+python3.12 -m venv --copies .venv
 source .venv/bin/activate
-python -m pip install -r requirements-dev.txt
-export PYTHONDONTWRITEBYTECODE=1
-python examples/offline_demo.py
-bash scripts/verify-foundation.sh
+python -m pip install .
+codex-grapher doctor --json
+codex-grapher demo --json
 ```
 
-Cloning and installing development dependencies require network access. The demo
-and foundation checks run locally with no model calls or services. Foundation
-checks run the unit suite, validate schemas/configuration, check shell syntax,
-and inspect installer dry-run output; they do not apply an installation.
+The full example creates actual local Git changes, runs required tests, ingests
+immutable evidence, obtains a signed task result from a separate deterministic
+sample evaluator, and promotes the accepted commit. Its successor reads the
+accepted generation. The default temporary workspace is removed afterwards.
+The sample evaluator checks this example's task assertions; it is not a general
+code reviewer. Local roles share a user account and are for trusted development.
 
-The demo explicitly bootstraps a temporary database, creates `build → review`,
-and shows `build` move through `READY → LEASED → RUNNING`. `review` remains
-`BLOCKED`: its prerequisite must be independently evaluated and integrated first.
-The output reports `NOT_PASS`; the demo does not run a worker or create evaluation
-evidence. Temporary database files are removed on exit.
+## Run your own repository task
 
-To run just the tests:
+Follow the [repository workflow guide](docs/REPOSITORY_WORKFLOW.md) to provision
+an evaluation key, create a pinned execution profile with `profile create`, and
+write a task using the [example](examples/repository-workflow/README.md).
+The lifecycle commands are:
 
 ```bash
-PYTHONDONTWRITEBYTECODE=1 python -m unittest discover -s tests -v
+codex-grapher init --repo /absolute/source --task /absolute/task.json \
+  --profile /absolute/profile.json --workspace /absolute/new-workspace --json
+codex-grapher run --workspace /absolute/new-workspace --json
+codex-grapher status --workspace /absolute/new-workspace --json
+codex-grapher recover --workspace /absolute/new-workspace --json
+codex-grapher backup --workspace /absolute/new-workspace --output /absolute/backup.tar --json
+codex-grapher rollback --workspace /absolute/new-workspace --json
 ```
 
-## How it fits together
+Source admission requires a clean, self-contained repository at the declared
+commit. Work happens in a separate checkout; promotion updates the workspace's
+accepted generation. Required tests and independent checks must both pass before
+the signer approves integration. Recovery reuses sealed evidence; an interrupted
+unsealed worker reservation pauses for operator attention.
 
-```text
-Hermes planner / native Buzz interface (intended integration)
-  → durable SQLite project graph
-  → isolated Codex attempt
-  → immutable artifact ingress
-  → independent evaluator and signed outcome
-  → deterministic Git integration and accepted baseline
-  → human approval for consequential actions
+`trusted-local` runs trusted development roles under one non-root user.
+`isolated-linux` requires x86-64 Linux, an explicit root bootstrap in the initial
+kernel UID domain, four distinct non-root role identities and Linux namespaces.
+Candidate tests run without the signer's
+private key or network access. Root remains trusted; this is not isolation from
+the host administrator. In this mode Codex delegates sandbox enforcement to the
+outer runner; its inner CLI setting is explicitly `danger-full-access`, admitted
+only after the runner's boundary checks. Trusted local execution keeps Codex's
+`workspace-write` setting. Neither mode runs the actual provider as root.
+
+Backups include graph state, Git objects and custom refs, frozen inputs, all
+retained evidence and publication generations. Restore requires the original
+absolute workspace/tool paths and matching profile. Private keys and provider
+login data are excluded; a restore without the matching private signing key
+supports verification until the operator provisions it separately.
+
+## Pause and recover a task
+
+Choose a new workspace outside this checkout so generated keys and state remain
+outside the source tree:
+
+```bash
+codex-grapher demo --workspace /tmp/grapher-example --stop-after built --json
+codex-grapher recover --workspace /tmp/grapher-example --json
+codex-grapher demo --workspace /tmp/grapher-example --operation status --json
+codex-grapher rollback --workspace /tmp/grapher-example --json
 ```
 
-- `control_plane/project_graph.py` handles task states, leases, dependencies,
-  and event-chain integrity. Runtime opens an explicitly bootstrapped schema;
-  it never silently creates or migrates a database.
-- Artifact and evidence modules bind immutable attempt contents, evaluator
-  claims, signed outcomes, and exact test outputs to durable identifiers.
-- Integration and publication modules check evidence and write scope before
-  updating accepted Git state, with a durable promotion/rollback journal.
-- `tests/` exercises local fixtures and denial paths. `schemas/`, `config/`, and
-  the design documents preserve the contracts those fixtures implement.
+Recovery reuses the durable artifact and journal instead of treating a second
+invocation as a new accepted change. Rollback restores the recorded predecessor;
+it does not delete the prior evidence or immutable generation.
 
-The inherited active route set is exactly `nomad`, `opensource`, `business`, and
-`hynix`. Hermes native Buzz is the intended operator surface; its current adapter
-is a local fixture. Slack and `fin-global` remain frozen compatibility artifacts.
+For interruption, failure, database inspection, task-policy configuration, and
+adapting the producer to your own work, see the [developer workflow](docs/DEVELOPER_WORKFLOW.md).
 
-## Limits and next work
+## What is enforced
 
-This is a local core for inspection and development. Active worker producer
-wiring, native Buzz transport, deployed service/configuration evidence, real
-worker operation, host restart recovery, representative four-route operation,
-and final-user validation remain unproven. Deployment scripts describe future
-operation and are not part of this quickstart. Legacy deployment/sync helpers
-require explicit `HERMES_PROJECTS_ROOT` configuration; remote sync also requires
-`HERMES_VPS_HOST` and `HERMES_VPS_SSH_KEY`. They are separate opt-in operations.
+- Exact live worker leases and route-scoped heartbeat renewal.
+- Classified, persisted retry delays and finite attempt/stagnation limits;
+  permanent/safety failures do not retry automatically.
+- Human-gated tasks cannot execute without a separate approval mechanism; this
+  developer cycle does not implement consequential approval capabilities.
+- Immutable artifact/claim/outcome identities, clean-SHA test evidence, signature
+  verification, allowed-path checks, compare-and-swap promotion and rollback.
+- Explicit task-evaluation policies for local work. Legacy release evaluation
+  retains its original sections and hard gates.
+- Bounded socket framing, admission and network waits; offline read-only state
+  and event inspection with clear limits on what has been verified.
+- Durable worker invocation reservations, bounded execution time and combined
+  output, and process cleanup before candidate handoff.
+- SQLite DELETE/EXTRA with one OS writer owner by default. Optional WAL/FULL
+  requires a verified fixed library actually loaded by the process. Patch status
+  and supported operating mode are reported separately by `doctor`.
 
-The next development stages are to connect the artifact producer and accepted
-baseline consumer, validate independent identities in an authorized sandbox,
-exercise native Buzz and restart recovery, and collect representative evidence
-for an independent review against the frozen [rubric](RUBRIC.md). Adaptive retry
-and stagnation policies also remain release targets. These are development
-goals, not promised capabilities or dates.
+The database remains schema v5; runtime constructors never create or migrate it
+implicitly. The inherited route set is `nomad`, `opensource`, `business`, and
+`hynix`; use `opensource` for development tasks. Hermes native Buzz remains the
+intended remote operator interface. Slack and `fin-global` are legacy artifacts.
 
-`LOCAL_FIXTURE_PASS` requires independent review of exact-SHA machine evidence.
-It never implies an operational `PASS`. The operational release verdict stays
-`NOT_PASS` until every frozen hard gate passes; publication does not waive them.
+## Development checks
 
-Read [publication provenance](docs/PUBLICATION.md) for source history and evidence
-limits, [CONTRIBUTING.md](CONTRIBUTING.md) before making changes, and
-[SECURITY.md](SECURITY.md) for private vulnerability reporting guidance. The code
-is licensed under [MIT](LICENSE).
+```bash
+python -m pip install -r requirements-dev.txt
+PYTHONDONTWRITEBYTECODE=1 bash scripts/verify-foundation.sh
+python examples/verified_lifecycle.py
+```
+
+Foundation checks require ripgrep (`rg`), run the unit suite, validate schemas and
+configuration, check shell syntax, and inspect installer dry runs. They do not
+install services. The original `python examples/offline_demo.py` remains a small
+scheduling-only example that stops at `RUNNING/BLOCKED`.
+
+## Evidence and limits
+
+The [portable-worker contract](docs/cycles/20260921-portable-workers/RUBRIC.md)
+requires installed-package tasks, actual Codex execution, observed role denials,
+guest restart/reset recovery and a fresh backup restore. Unit tests alone do not
+prove these gates. The [guest harness](examples/guest-recovery/README.md) runs in
+a disposable VM; it does not reboot or provision the host.
+
+The [reliability cycle](docs/cycles/20260921-reliability/HANDOFF.md) records the
+problem, frozen contract and [upstream research](docs/UPSTREAM.md). Improvements
+adapt mechanisms from LangGraph, DBOS, Temporal, OpenHands and mini-SWE-agent
+without adding those frameworks as dependencies.
+
+The broader [operational rubric](RUBRIC.md) still requires deployed service and
+identity evidence, native Buzz, real project workers and host recovery. A local
+sample or unit test cannot prove those. Deployment scripts are separate operator
+facilities and are not part of installation or the quickstart. Neither commands
+nor documentation grant permission to deploy, publish, send messages or trade.
+
+Read [CONTRIBUTING.md](CONTRIBUTING.md), [SECURITY.md](SECURITY.md), and
+[publication provenance](docs/PUBLICATION.md). Licensed under [MIT](LICENSE).

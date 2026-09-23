@@ -1,0 +1,343 @@
+{
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "mode",
+    "tools",
+    "provider",
+    "roles",
+    "auth",
+    "paths",
+    "sqlite"
+  ],
+  "properties": {
+    "schema_version": {
+      "type": "integer",
+      "const": 1
+    },
+    "mode": {
+      "enum": [
+        "trusted-local",
+        "isolated-linux"
+      ]
+    },
+    "tools": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "python",
+        "git",
+        "provider",
+        "openssl",
+        "bwrap",
+        "setpriv"
+      ],
+      "properties": {
+        "python": {
+          "$ref": "#/$defs/tool"
+        },
+        "git": {
+          "$ref": "#/$defs/tool"
+        },
+        "provider": {
+          "$ref": "#/$defs/tool"
+        },
+        "openssl": {
+          "$ref": "#/$defs/tool"
+        },
+        "bwrap": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/tool"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "setpriv": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/tool"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      }
+    },
+    "provider": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "backend",
+        "model",
+        "reasoning_effort",
+        "service_tier"
+      ],
+      "properties": {
+        "backend": {
+          "const": "codex"
+        },
+        "model": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:/+-]{0,127}$"
+        },
+        "reasoning_effort": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:/+-]{0,127}$"
+        },
+        "service_tier": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:/+-]{0,127}$"
+        }
+      }
+    },
+    "roles": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "worker",
+        "test_runner",
+        "signer",
+        "graph"
+      ],
+      "properties": {
+        "worker": {
+          "$ref": "#/$defs/role"
+        },
+        "test_runner": {
+          "$ref": "#/$defs/role"
+        },
+        "signer": {
+          "$ref": "#/$defs/role"
+        },
+        "graph": {
+          "$ref": "#/$defs/role"
+        }
+      }
+    },
+    "auth": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "kind",
+        "account"
+      ],
+      "properties": {
+        "kind": {
+          "const": "existing-cli-login"
+        },
+        "account": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256,
+          "pattern": "^[^\\u0000-\\u001f\\u007f]+$"
+        }
+      }
+    },
+    "paths": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "trusted_code_root",
+        "trusted_code_sha256",
+        "signer_private_key",
+        "signer_public_key"
+      ],
+      "properties": {
+        "trusted_code_root": {
+          "$ref": "#/$defs/path"
+        },
+        "trusted_code_sha256": {
+          "$ref": "#/$defs/hash"
+        },
+        "signer_private_key": {
+          "$ref": "#/$defs/path"
+        },
+        "signer_public_key": {
+          "$ref": "#/$defs/path"
+        }
+      }
+    },
+    "sqlite": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "profile",
+        "attestation"
+      ],
+      "properties": {
+        "profile": {
+          "enum": [
+            "delete-extra",
+            "wal-full"
+          ]
+        },
+        "attestation": {
+          "anyOf": [
+            {
+              "type": "null"
+            },
+            {
+              "$ref": "#/$defs/path"
+            }
+          ]
+        }
+      }
+    }
+  },
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:codex-grapher:schema:execution-profile:v1",
+  "title": "Trusted operator execution profile v1",
+  "$defs": {
+    "path": {
+      "type": "string",
+      "minLength": 2,
+      "maxLength": 4096,
+      "pattern": "^/(?!/)(?!.*(?:/\\.{1,2})(?:/|$))(?!.*//)(?!.*[\\u0000-\\u001f\\u007f])[^\\r\\n]+(?<!/)$"
+    },
+    "hash": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "tool": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "path",
+        "sha256",
+        "version"
+      ],
+      "properties": {
+        "path": {
+          "$ref": "#/$defs/path"
+        },
+        "sha256": {
+          "$ref": "#/$defs/hash"
+        },
+        "version": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 1024,
+          "pattern": "^[^\\u0000-\\u001f\\u007f]+$"
+        }
+      }
+    },
+    "role": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "uid",
+        "gid"
+      ],
+      "properties": {
+        "uid": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 4294967294
+        },
+        "gid": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 4294967294
+        }
+      }
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "mode": {
+            "const": "isolated-linux"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "tools": {
+            "properties": {
+              "bwrap": {
+                "$ref": "#/$defs/tool"
+              },
+              "setpriv": {
+                "$ref": "#/$defs/tool"
+              }
+            }
+          },
+          "roles": {
+            "properties": {
+              "worker": {
+                "properties": {
+                  "uid": {
+                    "minimum": 1
+                  }
+                }
+              },
+              "test_runner": {
+                "properties": {
+                  "uid": {
+                    "minimum": 1
+                  }
+                }
+              },
+              "signer": {
+                "properties": {
+                  "uid": {
+                    "minimum": 1
+                  }
+                }
+              },
+              "graph": {
+                "properties": {
+                  "uid": {
+                    "minimum": 1
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "sqlite": {
+            "properties": {
+              "profile": {
+                "const": "delete-extra"
+              }
+            }
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "sqlite": {
+            "properties": {
+              "attestation": {
+                "type": "null"
+              }
+            }
+          }
+        }
+      },
+      "else": {
+        "properties": {
+          "sqlite": {
+            "properties": {
+              "attestation": {
+                "$ref": "#/$defs/path"
+              }
+            }
+          }
+        }
+      }
+    }
+  ],
+  "$comment": "The loader additionally verifies distinct kernel UIDs, actual auth account/home, nonsymlink protected filesystem ancestry, executable and code hashes and loaded SQLite attestation. Tool version strings are pins; role-scoped provider preflight verifies actual versions without privileged execution."
+}

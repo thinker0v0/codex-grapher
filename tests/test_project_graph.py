@@ -6,6 +6,7 @@ import datetime as dt
 import json
 import sqlite3
 from pathlib import Path
+from unittest.mock import patch
 
 from control_plane.evidence_ingress import IngressArtifact
 from control_plane.evidence_store import deterministic_claim_id
@@ -77,7 +78,10 @@ class ProjectGraphTests(unittest.TestCase):
 
     def running(self, node_id="n1"):
         ready = self.graph.get_node(node_id)
-        leased = self.graph.lease(node_id, ready["version"], "fixture-worker", 60)
+        eligible = self.graph.retry_status(node_id)["next_eligible_at"]
+        clock = max(dt.datetime.now(dt.timezone.utc), dt.datetime.fromisoformat(eligible)) if eligible else dt.datetime.now(dt.timezone.utc)
+        with patch("control_plane.project_graph.utc_now", return_value=clock):
+            leased = self.graph.lease(node_id, ready["version"], "fixture-worker", 60)
         return self.graph.start(
             node_id, leased["version"], leased["lease_id"], "fixture-worker",
         )
@@ -281,6 +285,25 @@ class ProjectGraphTests(unittest.TestCase):
                 "n1", recorded["node"]["version"], f"sha256:{'f' * 64}", "hermes-evaluator",
             )
         self.assertEqual(self.graph.get_node("n1"), before)
+
+    def test_evaluator_retry_preserves_backoff_and_pauses_repeated_failures(self):
+        for reason in ("8" * 64, "9" * 64):
+            artifact, _, _, claimed = self.claimed()
+            result = self.graph.reject_evidence(
+                "n1", claimed["node"]["version"], artifact.artifact_id,
+                "RETRY", reason, "hermes-evaluator",
+            )
+            replay = self.graph.reject_evidence(
+                "n1", claimed["node"]["version"], artifact.artifact_id,
+                "RETRY", reason, "hermes-evaluator",
+            )
+            self.assertEqual(result["node"], replay["node"])
+            if result["node"]["state"] == "READY":
+                with self.assertRaisesRegex(RuntimeError, "backoff"):
+                    self.graph.lease("n1", result["node"]["version"], "fixture-worker", 60)
+        self.assertEqual((result["node"]["state"], result["node"]["attempt"]), ("NEEDS_HUMAN", 2))
+        self.assertEqual(self.graph.retry_status("n1")["failure_class"], "EVALUATOR_RETRY")
+        self.graph.assert_static_integrity()
 
     def test_claim_heartbeat_is_exact_and_extends_durable_expiry(self):
         artifact, _, _, claimed = self.claimed()
@@ -695,8 +718,7 @@ class ProjectGraphTests(unittest.TestCase):
         ).fetchone()[0], 0)
 
     def test_restart_recovers_work_without_terminalizing_it(self):
-        row = self.graph.transition("n1", 0, "LEASED", "lease")
-        self.graph.transition("n1", row["version"], "RUNNING", "started")
+        self.running()
         self.assertEqual(self.graph.recover_leases(force_startup=True), 1)
         self.assertEqual(self.graph.get_node("n1")["state"], "READY")
 

@@ -1,0 +1,458 @@
+{
+  "schema_version": 1,
+  "project_id": "opensource",
+  "task_id": "portable-workers-unit-v-toolchain-lock",
+  "idempotency_key": "portable-workers-unit-v-toolchain-lock-20260921-v1",
+  "record_id": "opensource.guest-recovery.toolchain-lock.v1",
+  "owner": "guest_harness_builder/guest_pin_manifest",
+  "status": "INTEGRITY_VERIFIED_RUNTIME_INCOMPLETE",
+  "classification": "public",
+  "observed_date": "2026-09-21",
+  "review_by": "2026-09-28",
+  "scope": "Pinned download integrity and task-local extraction inputs; no guest boot or product acceptance claim.",
+  "tcg_tb_size_mib": 64,
+  "image": {
+    "filename": "debian-13-genericcloud-amd64-20260914-2601.qcow2",
+    "url": "https://cloud.debian.org/images/cloud/trixie/20260914-2601/debian-13-genericcloud-amd64-20260914-2601.qcow2",
+    "size_bytes": 340983808,
+    "sha512": "95e110dfcdbd0ed8a82a75ed9579802f9950cabf51a810dcc6388e81bc778188713878b9f28d583a0ea602fbf48b35996ae9ad37f584166d8fbd6489df248f53",
+    "architecture": "amd64",
+    "distribution": "Debian 13 trixie",
+    "build": "20260914-2601",
+    "format": "qcow2",
+    "checksum_manifest_url": "https://cloud.debian.org/images/cloud/trixie/20260914-2601/SHA512SUMS",
+    "checksum_manifest_observed_sha256": "6e1f384b152ce4bc7c5f287b5559f18786de3036915e6e6c42b3fcb8dfd8709a",
+    "upstream_signature_verified": false,
+    "cached_content_verified": true,
+    "cache_provenance": "Pilot fetched latest/debian-13-genericcloud-amd64.qcow2; cached bytes match the dated build checksum and exact size. Consumers use the dated URL above."
+  },
+  "packages": [
+    {
+      "package": "acl",
+      "version": "2.3.2-1build1.1",
+      "architecture": "amd64",
+      "filename": "acl_2.3.2-1build1.1_amd64.deb",
+      "url": "https://archive.ubuntu.com/ubuntu/pool/main/a/acl/acl_2.3.2-1build1.1_amd64.deb",
+      "size_bytes": 39398,
+      "sha256": "0beec20d005bb4b3138ac9c99ab7c10a06acaf1ea1ad4e10ad760e56561edd58"
+    },
+    {
+      "package": "ipxe-qemu",
+      "version": "1.21.1+git-20220113.fbbdc3926-0ubuntu2",
+      "architecture": "all",
+      "filename": "ipxe-qemu_1.21.1+git-20220113.fbbdc3926-0ubuntu2_all.deb",
+      "url": "https://archive.ubuntu.com/ubuntu/pool/main/i/ipxe/ipxe-qemu_1.21.1+git-20220113.fbbdc3926-0ubuntu2_all.deb",
+      "size_bytes": 1564600,
+      "sha256": "1f1612934b6ddaf4dd633760dfe5ef2a79ea2507341fd5efe394ff589a044707"
+    },
+    {
+      "package": "libbrlapi0.8",
+      "version": "6.6-4ubuntu5",
+      "architecture": "amd64",
+      "filename": "libbrlapi0.8_6.6-4ubuntu5_amd64.deb",
+      "url": "https://archive.ubuntu.com/ubuntu/pool/main/b/brltty/libbrlapi0.8_6.6-4ubuntu5_amd64.deb",
+      "size_bytes": 31388,
+      "sha256": "82272b3090c912e45d92ff7ed200de289c47e504513559377a6f6c5a372cbcf5"
+    },
+    {
+      "package": "libpcsclite1",
+      "version": "2.0.3-1build1",
+      "architecture": "amd64",
+      "filename": "libpcsclite1_2.0.3-1build1_amd64.deb",
+      "url": "https://archive.ubuntu.com/ubuntu/pool/main/p/pcsc-lite/libpcsclite1_2.0.3-1build1_amd64.deb",
+      "size_bytes": 21432,
+      "sha256": "703bacc9204a7ecc24486ac8c96d15d0b9e2c91c385388e132ad4fd8f56f035a"
+    },
+    {
+      "package": "libcacard0",
+      "version": "1:2.8.0-3build4",
+      "architecture": "amd64",
+      "filename": "libcacard0_2.8.0-3build4_amd64.deb",
+      "url": "https://archive.ubuntu.com/ubuntu/pool/main/libc/libcacard/libcacard0_2.8.0-3build4_amd64.deb",
+      "size_bytes": 36546,
+      "sha256": "7a75de14b0fdff2828a3d218a49e7fe4da2df533185ba9ccbabd0647db05e33c"
+    },
+    {
+      "package": "libdaxctl1",
+      "version": "77-2ubuntu2",
+      "architecture": "amd64",
+      "filename": "libdaxctl1_77-2ubuntu2_amd64.deb",
+      "url": "https://archive.ubuntu.com/ubuntu/pool/main/n/ndctl/libdaxctl1_77-2ubuntu2_amd64.deb",
+      "size_bytes": 21404,
+      "sha256": "c6629b49c79343fb11ae404aeaa3156f051168da6c6d3d9d8d516acd94705061"
+    },
+    {
+      "package": "libndctl6",
+      "version": "77-2ubuntu2",
+      "architecture": "amd64",
+      "filename": "libndctl6_77-2ubuntu2_amd64.deb",
+      "url": "https://archive.ubuntu.com/ubuntu/pool/main/n/ndctl/libndctl6_77-2ubuntu2_amd64.deb",
+      "size_bytes": 62750,
+      "sha256": "4eab53588a8fa9e3192635e118c2d91bc069cde46a4a3785c77a0bb1ae001d02"
+    },
+    {
+      "package": "libpmem1",
+      "version": "1.13.1-1.1ubuntu2",
+      "architecture": "amd64",
+      "filename": "libpmem1_1.13.1-1.1ubuntu2_amd64.deb",
+      "url": "https://archive.ubuntu.com/ubuntu/pool/main/p/pmdk/libpmem1_1.13.1-1.1ubuntu2_amd64.deb",
+      "size_bytes": 84760,
+      "sha256": "8f1be1cc834a98f0cf5c0950153f7f939a0c2c92095e98cd7bb40c752c545c1b"
+    },
+    {
+      "package": "librdmacm1t64",
+      "version": "50.0-2ubuntu0.2",
+      "architecture": "amd64",
+      "filename": "librdmacm1t64_50.0-2ubuntu0.2_amd64.deb",
+      "url": "https://archive.ubuntu.com/ubuntu/pool/main/r/rdma-core/librdmacm1t64_50.0-2ubuntu0.2_amd64.deb",
+      "size_bytes": 70698,
+      "sha256": "7b7cc2fa16564bf301751b43d05d16f0846288b080d9a25a92a691d0df33fc68"
+    },
+    {
+      "package": "libslirp0",
+      "version": "4.7.0-1ubuntu3.1",
+      "architecture": "amd64",
+      "filename": "libslirp0_4.7.0-1ubuntu3.1_amd64.deb",
+      "url": "https://archive.ubuntu.com/ubuntu/pool/main/libs/libslirp/libslirp0_4.7.0-1ubuntu3.1_amd64.deb",
+      "size_bytes": 63830,
+      "sha256": "4efa2d1c509de4d10fe965e86a3d864bf542996caf476d9111fd882c73857164"
+    },
+    {
+      "package": "libusbredirparser1t64",
+      "version": "0.13.0-2.1build1",
+      "architecture": "amd64",
+      "filename": "libusbredirparser1t64_0.13.0-2.1build1_amd64.deb",
+      "url": "https://archive.ubuntu.com/ubuntu/pool/main/u/usbredir/libusbredirparser1t64_0.13.0-2.1build1_amd64.deb",
+      "size_bytes": 16508,
+      "sha256": "78be9176f05512bcac369fcada499686b1dd34320965d27e3405c7aacbc4e461"
+    },
+    {
+      "package": "qemu-system-common",
+      "version": "1:8.2.2+ds-0ubuntu1.18",
+      "architecture": "amd64",
+      "filename": "qemu-system-common_8.2.2+ds-0ubuntu1.18_amd64.deb",
+      "url": "https://archive.ubuntu.com/ubuntu/pool/main/q/qemu/qemu-system-common_8.2.2+ds-0ubuntu1.18_amd64.deb",
+      "size_bytes": 1255316,
+      "sha256": "0a0b744f31e87d72dd0465436b8dfbb1ef9f574ecd0d5a2e9dd8c5cb7d0fef1f"
+    },
+    {
+      "package": "qemu-system-data",
+      "version": "1:8.2.2+ds-0ubuntu1.18",
+      "architecture": "all",
+      "filename": "qemu-system-data_8.2.2+ds-0ubuntu1.18_all.deb",
+      "url": "https://archive.ubuntu.com/ubuntu/pool/main/q/qemu/qemu-system-data_8.2.2+ds-0ubuntu1.18_all.deb",
+      "size_bytes": 1796342,
+      "sha256": "a14b88d864859bd61c8a3274971da4ecb7da6cec15be6c265d0d411f783d5f2e"
+    },
+    {
+      "package": "libfdt1",
+      "version": "1.7.0-2build1",
+      "architecture": "amd64",
+      "filename": "libfdt1_1.7.0-2build1_amd64.deb",
+      "url": "https://archive.ubuntu.com/ubuntu/pool/main/d/device-tree-compiler/libfdt1_1.7.0-2build1_amd64.deb",
+      "size_bytes": 20128,
+      "sha256": "274d20dfab9d6b216b5de85446a93f6ce5b2cd82c847b8dfdc508577f76eb96a"
+    },
+    {
+      "package": "seabios",
+      "version": "1.16.3-2",
+      "architecture": "all",
+      "filename": "seabios_1.16.3-2_all.deb",
+      "url": "https://archive.ubuntu.com/ubuntu/pool/main/s/seabios/seabios_1.16.3-2_all.deb",
+      "size_bytes": 174648,
+      "sha256": "cac4e59a66c834d19cae751c22ab3a0391c22f78010fd11aa2e3fe630e6bc0e0"
+    },
+    {
+      "package": "qemu-system-x86",
+      "version": "1:8.2.2+ds-0ubuntu1.18",
+      "architecture": "amd64",
+      "filename": "qemu-system-x86_8.2.2+ds-0ubuntu1.18_amd64.deb",
+      "url": "https://archive.ubuntu.com/ubuntu/pool/main/q/qemu/qemu-system-x86_8.2.2+ds-0ubuntu1.18_amd64.deb",
+      "size_bytes": 11222476,
+      "sha256": "14602e262627adac030329d2cecfee5f6c0938b34566ff2ea2d4c9a9eb02430d"
+    },
+    {
+      "package": "qemu-utils",
+      "version": "1:8.2.2+ds-0ubuntu1.18",
+      "architecture": "amd64",
+      "filename": "qemu-utils_8.2.2+ds-0ubuntu1.18_amd64.deb",
+      "url": "https://archive.ubuntu.com/ubuntu/pool/main/q/qemu/qemu-utils_8.2.2+ds-0ubuntu1.18_amd64.deb",
+      "size_bytes": 2220842,
+      "sha256": "10695e57937d8a1d0ec6d017a6770d02353ec0c9500e4a36928230b2d39026c5"
+    },
+    {
+      "package": "genisoimage",
+      "version": "9:1.1.11-3.5",
+      "architecture": "amd64",
+      "filename": "genisoimage_1.1.11-3.5_amd64.deb",
+      "url": "https://archive.ubuntu.com/ubuntu/pool/main/c/cdrkit/genisoimage_1.1.11-3.5_amd64.deb",
+      "size_bytes": 377720,
+      "sha256": "cfa9f63d8208a3e1b2c228357707f607e2b402334262d6f591abc44a429bb217"
+    }
+  ],
+  "package_count": 18,
+  "package_download_bytes": 19080786,
+  "extraction": {
+    "mode": "task-local-only",
+    "command_argv_template": [
+      "dpkg-deb",
+      "--extract",
+      "<VERIFIED_DEB>",
+      "<QEMU_ROOT>"
+    ],
+    "package_order": "packages array order",
+    "destination_rule": "Fresh dedicated task-local root; no host installation and no maintainer-script execution. Verify every archive size and SHA256 before extraction.",
+    "library_path_relative": [
+      "usr/lib/x86_64-linux-gnu",
+      "lib/x86_64-linux-gnu"
+    ],
+    "qemu_module_dir_relative": "usr/lib/x86_64-linux-gnu/qemu",
+    "qemu_relative_path": "usr/bin/qemu-system-x86_64",
+    "qemu_img_relative_path": "usr/bin/qemu-img",
+    "genisoimage_relative_path": "usr/bin/genisoimage",
+    "firmware_dir_relative": "usr/share/qemu",
+    "bios_relative_path": "usr/share/seabios/bios-256k.bin",
+    "required_environment": {
+      "PATH": "/usr/bin:/bin",
+      "LANG": "C.UTF-8",
+      "LC_ALL": "C.UTF-8",
+      "QEMU_MODULE_DIR": "<QEMU_ROOT>/usr/lib/x86_64-linux-gnu/qemu",
+      "LD_LIBRARY_PATH": "<QEMU_ROOT>/usr/lib/x86_64-linux-gnu:<QEMU_ROOT>/lib/x86_64-linux-gnu"
+    },
+    "environment_rule": "Construct this environment for task-local tools only; do not inherit ambient loader variables or forward these loader settings to worker/provider processes.",
+    "required_qemu_argv_fragments": [
+      "-L",
+      "<QEMU_ROOT>/usr/share/qemu",
+      "-bios",
+      "<QEMU_ROOT>/usr/share/seabios/bios-256k.bin",
+      "-accel",
+      "tcg,thread=single,tb-size=64"
+    ]
+  },
+  "extracted_artifacts": [
+    {
+      "relative_path": "usr/bin/qemu-system-x86_64",
+      "package": "qemu-system-x86",
+      "size_bytes": 26415624,
+      "sha256": "8a35ccba41582fc6c38b9df85fc9e35fa1d42f414d2d7d8090ee9b2f5e7c0854",
+      "verified_against_archive_member": true
+    },
+    {
+      "relative_path": "usr/bin/qemu-img",
+      "package": "qemu-utils",
+      "size_bytes": 2480872,
+      "sha256": "634320b91165669917123e8e79cce1c4d00cee0a4aa4d662d7c0a8186479b3fb",
+      "verified_against_archive_member": true
+    },
+    {
+      "relative_path": "usr/bin/genisoimage",
+      "package": "genisoimage",
+      "size_bytes": 694424,
+      "sha256": "9bacc5951ca0767701cfd8e6b47537f199977e51a6e943f4edfdcf9d639d99d2",
+      "verified_against_archive_member": true
+    },
+    {
+      "relative_path": "usr/share/seabios/bios-256k.bin",
+      "package": "seabios",
+      "size_bytes": 262144,
+      "sha256": "1a9ea4f17bcfb27bda5728e2c21d9fa074cf7947b9b4910bb28213a735c96735",
+      "verified_against_archive_member": true
+    }
+  ],
+  "qemu_option_evidence": {
+    "binary_relative_path": "usr/bin/qemu-system-x86_64",
+    "binary_sha256": "8a35ccba41582fc6c38b9df85fc9e35fa1d42f414d2d7d8090ee9b2f5e7c0854",
+    "supported_property_probe": {
+      "argv": [
+        "<QEMU_ROOT>/usr/bin/qemu-system-x86_64",
+        "-object",
+        "tcg-accel,help"
+      ],
+      "exit_code": 0,
+      "stdout": "tcg-accel options:\n  one-insn-per-tb=<bool> - Only put one guest insn in each translation block\n  split-wx=<bool>        - Map jit pages into separate RW and RX regions\n  tb-size=<int>          - TCG translation block cache size\n  thread=<string>\n",
+      "stdout_sha256": "051e75814fd14851f80a2e3c1854e1befef9b959f2c286f5509d9ff242ed632e",
+      "stderr": ""
+    },
+    "unsupported_help_syntax": {
+      "argv": [
+        "<QEMU_ROOT>/usr/bin/qemu-system-x86_64",
+        "-accel",
+        "tcg,help"
+      ],
+      "exit_code": 1,
+      "stderr": "qemu-system-x86_64: -accel tcg,help: Property 'tcg-accel.help' not found\n",
+      "stderr_sha256": "485ad697afae776d9a096da7279063d967ca8368540a06f327f7fe45bfab1ef4"
+    },
+    "claim": "Read-only QOM inspection exposes thread as string and tb-size as int. It does not prove acceptance of the exact value 64 or a successful guest launch.",
+    "exact_accel_argv_runtime_verified": false,
+    "guest_started": false,
+    "timeout_seconds": 10
+  },
+  "host_runtime_observation": {
+    "scope": "ELF interpreter --list results for three extracted executables, with the extraction environment. Observed dependency names do not pin host library bytes or libraries loaded later by modules.",
+    "portable_or_hermetic": false,
+    "interpreter": {
+      "path": "/lib64/ld-linux-x86-64.so.2",
+      "resolved_path": "/usr/lib/x86_64-linux-gnu/ld-linux-x86-64.so.2",
+      "sha256": "c20a2dc8917c755f02b94049356320fe1f62ac7d9f8994731f807d9df39302da",
+      "identity_kind": "observation, not a downloadable pin"
+    },
+    "probe_argv_template": [
+      "/lib64/ld-linux-x86-64.so.2",
+      "--list",
+      "<QEMU_ROOT>/<EXECUTABLE_RELATIVE_PATH>"
+    ],
+    "probe_exit_codes": {
+      "usr/bin/qemu-system-x86_64": 0,
+      "usr/bin/qemu-img": 0,
+      "usr/bin/genisoimage": 0
+    },
+    "task_local_initial_libraries": [
+      {
+        "soname": "libdaxctl.so.1",
+        "relative_path": "usr/lib/x86_64-linux-gnu/libdaxctl.so.1",
+        "resolved_relative_path": "usr/lib/x86_64-linux-gnu/libdaxctl.so.1.2.5",
+        "sha256": "9b81e8d837bc49013099d5dc8b5263772d645dfcb205d9566e91e7d414839b59"
+      },
+      {
+        "soname": "libfdt.so.1",
+        "relative_path": "usr/lib/x86_64-linux-gnu/libfdt.so.1",
+        "resolved_relative_path": "usr/lib/x86_64-linux-gnu/libfdt-1.7.0.so",
+        "sha256": "66c111808e61c7f6be6715b4b03d0fe75beb5bc5b3a8809608d58d99a6bc9828"
+      },
+      {
+        "soname": "libndctl.so.6",
+        "relative_path": "usr/lib/x86_64-linux-gnu/libndctl.so.6",
+        "resolved_relative_path": "usr/lib/x86_64-linux-gnu/libndctl.so.6.1.21",
+        "sha256": "97859d906e55e67786f6c3d2f568553f8638d9c717880cf1295cc53e6b0d433c"
+      },
+      {
+        "soname": "libpmem.so.1",
+        "relative_path": "usr/lib/x86_64-linux-gnu/libpmem.so.1",
+        "resolved_relative_path": "usr/lib/x86_64-linux-gnu/libpmem.so.1.0.0",
+        "sha256": "52f14a3f2a80464be81a56ac7098ba1a457309cd353e05a319ce55a915def9c0"
+      },
+      {
+        "soname": "librdmacm.so.1",
+        "relative_path": "usr/lib/x86_64-linux-gnu/librdmacm.so.1",
+        "resolved_relative_path": "usr/lib/x86_64-linux-gnu/librdmacm.so.1.3.50.0",
+        "sha256": "18609553ba84c9206739d0a6d62ae5371d4713058ed4b68c665e627d967df648"
+      },
+      {
+        "soname": "libslirp.so.0",
+        "relative_path": "usr/lib/x86_64-linux-gnu/libslirp.so.0",
+        "resolved_relative_path": "usr/lib/x86_64-linux-gnu/libslirp.so.0.4.0",
+        "sha256": "1f71a24af59f3aa76c1e0bcf7852de08c1c21c40524479b9d5df404d903b2280"
+      }
+    ],
+    "host_initial_library_sonames": {
+      "usr/bin/qemu-system-x86_64": [
+        "libaio.so.1t64",
+        "libblkid.so.1",
+        "libbpf.so.1",
+        "libc.so.6",
+        "libcap.so.2",
+        "libcrypto.so.3",
+        "libelf.so.1",
+        "libffi.so.8",
+        "libfuse3.so.3",
+        "libgio-2.0.so.0",
+        "libglib-2.0.so.0",
+        "libgmodule-2.0.so.0",
+        "libgmp.so.10",
+        "libgnutls.so.30",
+        "libgobject-2.0.so.0",
+        "libhogweed.so.6",
+        "libibverbs.so.1",
+        "libidn2.so.0",
+        "libjpeg.so.8",
+        "libkmod.so.2",
+        "liblzma.so.5",
+        "libm.so.6",
+        "libmount.so.1",
+        "libnettle.so.8",
+        "libnl-3.so.200",
+        "libnl-route-3.so.200",
+        "libnuma.so.1",
+        "libp11-kit.so.0",
+        "libpcre2-8.so.0",
+        "libpixman-1.so.0",
+        "libpng16.so.16",
+        "libsasl2.so.2",
+        "libseccomp.so.2",
+        "libselinux.so.1",
+        "libtasn1.so.6",
+        "libudev.so.1",
+        "libunistring.so.5",
+        "liburing.so.2",
+        "libuuid.so.1",
+        "libz.so.1",
+        "libzstd.so.1"
+      ],
+      "usr/bin/qemu-img": [
+        "libaio.so.1t64",
+        "libc.so.6",
+        "libffi.so.8",
+        "libglib-2.0.so.0",
+        "libgmodule-2.0.so.0",
+        "libgmp.so.10",
+        "libgnutls.so.30",
+        "libhogweed.so.6",
+        "libidn2.so.0",
+        "libm.so.6",
+        "libnettle.so.8",
+        "libnuma.so.1",
+        "libp11-kit.so.0",
+        "libpcre2-8.so.0",
+        "libtasn1.so.6",
+        "libunistring.so.5",
+        "liburing.so.2",
+        "libz.so.1",
+        "libzstd.so.1"
+      ],
+      "usr/bin/genisoimage": [
+        "libbz2.so.1.0",
+        "libc.so.6",
+        "liblzma.so.5",
+        "libmagic.so.1",
+        "libz.so.1"
+      ]
+    },
+    "remaining_runtime_identity": "Record host OS/architecture, interpreter and resolved library hashes, QEMU loaded modules, firmware, command/environment identity and actual guest runtime at execution. These 18 debs are not the complete dependency closure for a clean host."
+  },
+  "provenance": {
+    "source_date": "2026-09-21",
+    "retrieval_date": "2026-09-21",
+    "effective_date": "2026-09-21",
+    "trust_level": "Existing recorded first-party package/image metadata plus locally verified cached bytes; upstream image signature remains unverified.",
+    "source_records": [
+      {
+        "record": "qemu-local-extract-estimate.json",
+        "sha256": "34763627a1e46416d0e046621f367276e48b1033d1a50fc90bc36348d2a73f35"
+      },
+      {
+        "record": "seed-tool-estimate.json",
+        "sha256": "b0d25829aea4fdcee881c51e3a98a0d431ad8756b4e11c97af63e36f5c26275c"
+      },
+      {
+        "record": "VM_PRIMARY_SOURCES.md",
+        "sha256": "0090ae25e8b2411b1c6876eb90482dba01496f9a8fd1d2cbbafa3e4d0a475e63"
+      },
+      {
+        "record": "vm-pilot-result.json",
+        "sha256": "1f6a14a702380f7811ee451fdabcb4123894e401441272a7d944b1ffeaafefb1"
+      },
+      {
+        "record": "vm-debian-pinned-build.json",
+        "sha256": "19c77fe3a6aaa4457490f6e5dcab738b8b80dd860ade76a4501f7263d6b00238"
+      }
+    ],
+    "source_record_location": "Enclosing research evidence; runtime consumers must use only this public lock and must not depend on that private enclosing path.",
+    "validation": "18 cached deb SHA256/size checks, cached image SHA512/size check, dpkg-deb Package/Version/Architecture inspection, four extracted artifact hashes compared with their pinned archive members, read-only loader and QOM probes.",
+    "network_used": false,
+    "packages_installed": false,
+    "guest_started": false,
+    "private_keys_accessed": false,
+    "content_hash_rule": "SHA256 of exact toolchain-lock.json bytes is recorded by the caller/evidence packet; no self-referential in-document hash."
+  }
+}

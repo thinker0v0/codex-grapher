@@ -1,5 +1,15 @@
 # Decision Log
 
+> Current cycle: [2026-09-21 portable workers](docs/cycles/20260921-portable-workers/HANDOFF.md).
+> The user authorized generic repository tasks, real Codex subscription execution,
+> OS role separation, disposable guest restart/backup validation and SQLite support,
+> followed by a separate `claude-grapher` repository and OSS publication. Claude
+> live execution is explicitly deferred until the user obtains an account.
+> This supersedes historical NQ restrictions for the authorized cycle. Preserve
+> all legacy rubrics. No production changes, purchases or protected merges are
+> authorized; publication and owner delivery are separate actions, never tests.
+
+
 - **D010 · 2026-08-28 · Accepted:** Optimize maximum *verified value*, not token
   consumption. High budgets are ceilings. Reconsider only with local evidence that
   fixed maximum-length runs yield more accepted outcomes.
@@ -75,3 +85,18 @@
   router graph/audit plus final `COMPLETE` response, superseding D022's recorded
   cross-transaction fixture residual. Release remains `NOT_PASS` and the frozen
   rubric is unchanged.
+
+- **D024 · 2026-09-21 · Accepted:** The current user-selected completion target is
+  another developer installing, executing, verifying and recovering local work.
+  Private VPS/Buzz deployment is not a prerequisite for this separate developer
+  cycle. The historical NQ stop is superseded for authorized research and local
+  implementation; original operational release gates remain unchanged.
+- **D025 · 2026-09-21 · Accepted:** Preserve legacy release evaluation v3 and add
+  explicit task evaluation v4 under a trusted, immutable, separately hashed policy.
+  Task acceptance cannot imply product release acceptance or choose its own policy.
+- **D026 · 2026-09-21 · Accepted:** Adapt bounded retry, durable replay/history and
+  worker lifecycle mechanisms identified in the [upstream review](docs/UPSTREAM.md)
+  inside the existing stdlib core. Do not add a parallel orchestration framework.
+- **D027 · 2026-09-21 · Accepted:** Freeze the [developer cycle contract](docs/cycles/20260921-reliability/RUBRIC.md)
+  before implementation. Independent design review approved starting implementation
+  at 97/100; implementation/final-user evidence is evaluated separately.

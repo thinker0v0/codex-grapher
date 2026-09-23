@@ -1,0 +1,1209 @@
+{
+  "schema_version": 1,
+  "project_id": "opensource",
+  "task_id": "portable-workers-unit-v-guest-prerequisites",
+  "idempotency_key": "portable-workers-unit-v-guest-prerequisites-20260921-v1",
+  "record_id": "opensource.guest-recovery.guest-packages-lock.v1",
+  "owner": "guest_harness_builder/guest_pin_manifest",
+  "observed_date": "2026-09-21",
+  "review_by": "2026-09-28",
+  "classification": "public",
+  "status": "PINNED_OFFLINE_INPUTS_VERIFIED_GUEST_INSTALL_UNPROVEN",
+  "requested_packages": [
+    "git",
+    "bubblewrap"
+  ],
+  "base_image": {
+    "filename": "debian-13-genericcloud-amd64-20260914-2601.qcow2",
+    "build": "20260914-2601",
+    "architecture": "amd64",
+    "sha512": "95e110dfcdbd0ed8a82a75ed9579802f9950cabf51a810dcc6388e81bc778188713878b9f28d583a0ea602fbf48b35996ae9ad37f584166d8fbd6489df248f53",
+    "package_manifest_count": 322
+  },
+  "packages": [
+    {
+      "package": "libngtcp2-16",
+      "version": "1.11.0-1+deb13u1",
+      "architecture": "amd64",
+      "filename": "libngtcp2-16_1.11.0-1+deb13u1_amd64.deb",
+      "url": "https://deb.debian.org/debian/pool/main/n/ngtcp2/libngtcp2-16_1.11.0-1+deb13u1_amd64.deb",
+      "size_bytes": 131904,
+      "sha256": "627eec81ebbd48c4e6091f5cd9dc5070b792b7075000eed60ab08c7daa961caf",
+      "depends": "libc6 (>= 2.25)",
+      "pre_depends": "",
+      "conflicts": "",
+      "breaks": "",
+      "recommends": "",
+      "control_metadata_verified": true
+    },
+    {
+      "package": "libngtcp2-crypto-gnutls8",
+      "version": "1.11.0-1+deb13u1",
+      "architecture": "amd64",
+      "filename": "libngtcp2-crypto-gnutls8_1.11.0-1+deb13u1_amd64.deb",
+      "url": "https://deb.debian.org/debian/pool/main/n/ngtcp2/libngtcp2-crypto-gnutls8_1.11.0-1+deb13u1_amd64.deb",
+      "size_bytes": 29524,
+      "sha256": "2a7f109c0c4db6a800e4661c5e5e34e1f1f83c8162482276183d1ada9da7c96c",
+      "depends": "libc6 (>= 2.14), libgnutls30t64 (>= 3.8.2), libngtcp2-16 (>= 1.1.0)",
+      "pre_depends": "",
+      "conflicts": "",
+      "breaks": "",
+      "recommends": "",
+      "control_metadata_verified": true
+    },
+    {
+      "package": "libcurl3t64-gnutls",
+      "version": "8.14.1-2+deb13u5",
+      "architecture": "amd64",
+      "filename": "libcurl3t64-gnutls_8.14.1-2+deb13u5_amd64.deb",
+      "url": "https://deb.debian.org/debian/pool/main/c/curl/libcurl3t64-gnutls_8.14.1-2+deb13u5_amd64.deb",
+      "size_bytes": 384460,
+      "sha256": "19da93544615a4c9a3d7df473f5bf8ebca99442454622e9b0460168dadf7b8ae",
+      "depends": "libbrotli1 (>= 0.6.0), libc6 (>= 2.38), libgnutls30t64 (>= 3.8.6), libgssapi-krb5-2 (>= 1.17), libidn2-0 (>= 2.0.0), libldap2 (>= 2.6.2), libnettle8t64, libnghttp2-14 (>= 1.50.0), libnghttp3-9 (>= 0.15.0), libngtcp2-16 (>= 1.1.0), libngtcp2-crypto-gnutls8 (>= 1.1.0), libpsl5t64 (>= 0.16.0), librtmp1 (>= 2.3), libssh2-1t64 (>= 1.11.1), libzstd1 (>= 1.5.5), zlib1g (>= 1:1.2.3.4)",
+      "pre_depends": "",
+      "conflicts": "",
+      "breaks": "libcurl3-gnutls (<< 8.14.1-2+deb13u5)",
+      "recommends": "ca-certificates",
+      "control_metadata_verified": true
+    },
+    {
+      "package": "perl-modules-5.40",
+      "version": "5.40.1-6+deb13u1",
+      "architecture": "all",
+      "filename": "perl-modules-5.40_5.40.1-6+deb13u1_all.deb",
+      "url": "https://deb.debian.org/debian/pool/main/p/perl/perl-modules-5.40_5.40.1-6+deb13u1_all.deb",
+      "size_bytes": 3013728,
+      "sha256": "4c46cdd8f3135aa1c95f07e817f8e5d9be590687441ac1c27e3a8c49400f35ce",
+      "depends": "perl-base (>= 5.40.1-1)",
+      "pre_depends": "",
+      "conflicts": "perl-modules (<< 5.22.0~)",
+      "breaks": "libansicolor-perl (<< 5.01), libarchive-tar-perl (<< 3.02.001), libattribute-handlers-perl (<< 1.03), libautodie-perl (<< 2.37), libcpan-meta-perl (<< 2.150010), libcpan-meta-requirements-perl (<< 2.143), libcpan-meta-yaml-perl (<< 0.018), libdigest-perl (<< 1.20), libexperimental-perl (<< 0.032), libextutils-cbuilder-perl (<< 0.280240), libextutils-command-perl (<< 7.70), libextutils-install-perl (<< 2.22), libextutils-parsexs-perl (<< 3.510000), libfile-spec-perl (<< 3.9100), libhttp-tiny-perl (<< 0.088), libi18n-langtags-perl (<< 0.45), libio-zlib-perl (<< 1.15), libjson-pp-perl (<< 4.16000), liblocale-maketext-perl (<< 1.33), liblocale-maketext-simple-perl (<< 0.21.01), libmath-bigint-perl (<< 2.003002), libmath-complex-perl (<< 1.6200), libmodule-corelist-perl (<< 5.20250118.40), libmodule-load-conditional-perl (<< 0.74), libmodule-load-perl (<< 0.36), libmodule-metadata-perl (<< 1.000038), libnet-perl (<< 1:3.15), libnet-ping-perl (<< 2.76), libparams-check-perl (<< 0.38), libparent-perl (<< 0.241), libparse-cpan-meta-perl (<< 2.150010), libperl-ostype-perl (<< 1.010), libpod-escapes-perl (<< 1.07), libpod-simple-perl (<< 3.45), libterm-table-perl (<< 0.018), libtest-harness-perl (<< 3.48), libtest-simple-perl (<< 1.302199), libtest-tester-perl (<< 1.302199), libtest-use-ok-perl (<< 1.302199), libtest2-suite-perl (<< 0.000162), libtext-balanced-perl (<< 2.06), libthread-queue-perl (<< 3.14), libtime-local-perl (<< 1.3500), libunicode-collate-perl (<< 1.31), libversion-perl (<< 1:0.9930), maildirsync (<< 1.2-2.1), perl (<< 5.40.1~), podlators-perl (<< 5.01.02)",
+      "recommends": "perl (>= 5.40.1-1)",
+      "control_metadata_verified": true
+    },
+    {
+      "package": "libgdbm-compat4t64",
+      "version": "1.24-2",
+      "architecture": "amd64",
+      "filename": "libgdbm-compat4t64_1.24-2_amd64.deb",
+      "url": "https://deb.debian.org/debian/pool/main/g/gdbm/libgdbm-compat4t64_1.24-2_amd64.deb",
+      "size_bytes": 50280,
+      "sha256": "2cbd43cf2dfbf57ff48188b5d79d29cf7ea8f0dedaa61ab0bcc02eceff50ea01",
+      "depends": "libc6 (>= 2.33), libgdbm6t64 (>= 1.16)",
+      "pre_depends": "",
+      "conflicts": "",
+      "breaks": "libgdbm-compat4 (<< 1.24-2)",
+      "recommends": "",
+      "control_metadata_verified": true
+    },
+    {
+      "package": "libperl5.40",
+      "version": "5.40.1-6+deb13u1",
+      "architecture": "amd64",
+      "filename": "libperl5.40_5.40.1-6+deb13u1_amd64.deb",
+      "url": "https://deb.debian.org/debian/pool/main/p/perl/libperl5.40_5.40.1-6+deb13u1_amd64.deb",
+      "size_bytes": 4325996,
+      "sha256": "e44777ff47ad248d1debd57e1f96ab5e89061a341008ae39880ba3b5fc15f273",
+      "depends": "libbz2-1.0, libc6 (>= 2.38), libcrypt1 (>= 1:4.1.0), libdb5.3t64, libgdbm-compat4t64 (>= 1.18-3), libgdbm6t64 (>= 1.21), zlib1g (>= 1:1.2.3.4), perl-modules-5.40 (>= 5.40.1-6+deb13u1)",
+      "pre_depends": "",
+      "conflicts": "",
+      "breaks": "libcompress-raw-bzip2-perl (<< 2.212), libcompress-raw-zlib-perl (<< 2.212), libcompress-zlib-perl (<< 2.212), libdigest-md5-perl (<< 2.58.01), libdigest-sha-perl (<< 6.04), libencode-perl (<< 3.21), libfilter-perl (<< 1.64), libio-compress-base-perl (<< 2.212), libio-compress-bzip2-perl (<< 2.212), libio-compress-perl (<< 2.212), libio-compress-zlib-perl (<< 2.212), libmime-base64-perl (<< 3.16.01), libstorable-perl (<< 3.32), libsys-syslog-perl (<< 0.36), libthreads-perl (<< 2.40), libthreads-shared-perl (<< 1.69), libtime-hires-perl (<< 1.9777), libtime-piece-perl (<< 1.3401.01)",
+      "recommends": "",
+      "control_metadata_verified": true
+    },
+    {
+      "package": "perl",
+      "version": "5.40.1-6+deb13u1",
+      "architecture": "amd64",
+      "filename": "perl_5.40.1-6+deb13u1_amd64.deb",
+      "url": "https://deb.debian.org/debian/pool/main/p/perl/perl_5.40.1-6+deb13u1_amd64.deb",
+      "size_bytes": 267736,
+      "sha256": "ef145c247787d6f40dcdefd5b417502484827cde0d555998c17fd5b27ec1e1dd",
+      "depends": "perl-base (= 5.40.1-6+deb13u1), perl-modules-5.40 (>= 5.40.1-6+deb13u1), libperl5.40 (= 5.40.1-6+deb13u1)",
+      "pre_depends": "",
+      "conflicts": "libjson-pp-perl (<< 2.27200-2)",
+      "breaks": "apt-show-versions (<< 0.22.10), libdist-inkt-perl (<< 0.024-5), libmarc-charset-perl (<< 1.35-3), libperl-dev (<< 5.24.0~), perl-doc (<< 5.40.1-1), perl-modules-5.22, perl-modules-5.24, perl-modules-5.26 (<< 5.26.2-5)",
+      "recommends": "netbase",
+      "control_metadata_verified": true
+    },
+    {
+      "package": "liberror-perl",
+      "version": "0.17030-1",
+      "architecture": "all",
+      "filename": "liberror-perl_0.17030-1_all.deb",
+      "url": "https://deb.debian.org/debian/pool/main/libe/liberror-perl/liberror-perl_0.17030-1_all.deb",
+      "size_bytes": 26872,
+      "sha256": "06110a972bdc52f6c6d6615dddbe97f836c61d0e36c685ef4107c2eaa81f871f",
+      "depends": "perl:any",
+      "pre_depends": "",
+      "conflicts": "",
+      "breaks": "",
+      "recommends": "",
+      "control_metadata_verified": true
+    },
+    {
+      "package": "git-man",
+      "version": "1:2.47.3-0+deb13u1",
+      "architecture": "all",
+      "filename": "git-man_2.47.3-0+deb13u1_all.deb",
+      "url": "https://deb.debian.org/debian/pool/main/g/git/git-man_2.47.3-0+deb13u1_all.deb",
+      "size_bytes": 2204692,
+      "sha256": "b58306b60e1dff920e1e18bc7e1e499f2ef75184190ab3d98657b165969bf7c9",
+      "depends": "",
+      "pre_depends": "",
+      "conflicts": "",
+      "breaks": "",
+      "recommends": "",
+      "control_metadata_verified": true
+    },
+    {
+      "package": "git",
+      "version": "1:2.47.3-0+deb13u1",
+      "architecture": "amd64",
+      "filename": "git_2.47.3-0+deb13u1_amd64.deb",
+      "url": "https://deb.debian.org/debian/pool/main/g/git/git_2.47.3-0+deb13u1_amd64.deb",
+      "size_bytes": 8861572,
+      "sha256": "3e35662fd5c46add561703e54031a1d8ad9df45811927689f0a51122b13be722",
+      "depends": "libc6 (>= 2.38), libcurl3t64-gnutls (>= 7.56.1), libexpat1 (>= 2.0.1), libpcre2-8-0 (>= 10.34), zlib1g (>= 1:1.2.2), perl, liberror-perl, git-man (>> 1:2.47.3), git-man (<< 1:2.47.3-.)",
+      "pre_depends": "",
+      "conflicts": "",
+      "breaks": "bash-completion (<< 1:1.90-1), cogito (<= 0.18.2+), dgit (<< 5.1~), git-buildpackage (<< 0.6.5), git-el (<< 1:2.32.0~rc2-1~), gitosis (<< 0.2+20090917-7), gitpkg (<< 0.15), guilt (<< 0.33), openssh-client (<< 1:6.8), stgit (<< 0.15), stgit-contrib (<< 0.15)",
+      "recommends": "ca-certificates, patch, less, ssh-client",
+      "control_metadata_verified": true
+    },
+    {
+      "package": "bubblewrap",
+      "version": "0.12.0-1~deb13u1",
+      "architecture": "amd64",
+      "filename": "bubblewrap_0.12.0-1~deb13u1_amd64.deb",
+      "url": "https://deb.debian.org/debian/pool/main/b/bubblewrap/bubblewrap_0.12.0-1~deb13u1_amd64.deb",
+      "size_bytes": 56876,
+      "sha256": "70aca4fa8daeacb677ec00e8063eb586f08ae3d94b1f11e684370b5524c43431",
+      "depends": "libc6 (>= 2.38), libcap2 (>= 1:2.10), libselinux1 (>= 3.1~)",
+      "pre_depends": "",
+      "conflicts": "",
+      "breaks": "",
+      "recommends": "procps",
+      "control_metadata_verified": true
+    }
+  ],
+  "package_count": 11,
+  "package_download_bytes": 19353640,
+  "install_order": [
+    "libngtcp2-16",
+    "libngtcp2-crypto-gnutls8",
+    "libcurl3t64-gnutls",
+    "perl-modules-5.40",
+    "libgdbm-compat4t64",
+    "libperl5.40",
+    "perl",
+    "liberror-perl",
+    "git-man",
+    "git",
+    "bubblewrap"
+  ],
+  "base_packages_required": [
+    {
+      "package": "libbrotli1",
+      "version": "1.1.0-2+b7"
+    },
+    {
+      "package": "libbz2-1.0",
+      "version": "1.0.8-6"
+    },
+    {
+      "package": "libc6",
+      "version": "2.41-12+deb13u4"
+    },
+    {
+      "package": "libcap2",
+      "version": "1:2.75-10+deb13u1+b3"
+    },
+    {
+      "package": "libcrypt1",
+      "version": "1:4.4.38-1"
+    },
+    {
+      "package": "libdb5.3t64",
+      "version": "5.3.28+dfsg2-9"
+    },
+    {
+      "package": "libexpat1",
+      "version": "2.8.3-1~deb13u1"
+    },
+    {
+      "package": "libgdbm6t64",
+      "version": "1.24-2"
+    },
+    {
+      "package": "libgnutls30t64",
+      "version": "3.8.9-3+deb13u4"
+    },
+    {
+      "package": "libgssapi-krb5-2",
+      "version": "1.21.3-5+deb13u1"
+    },
+    {
+      "package": "libidn2-0",
+      "version": "2.3.8-2"
+    },
+    {
+      "package": "libldap2",
+      "version": "2.6.10+dfsg-1"
+    },
+    {
+      "package": "libnettle8t64",
+      "version": "3.10.1-1"
+    },
+    {
+      "package": "libnghttp2-14",
+      "version": "1.64.0-1.1+deb13u1"
+    },
+    {
+      "package": "libnghttp3-9",
+      "version": "1.8.0-1"
+    },
+    {
+      "package": "libpcre2-8-0",
+      "version": "10.46-1~deb13u2"
+    },
+    {
+      "package": "libpsl5t64",
+      "version": "0.21.2-1.1+b1"
+    },
+    {
+      "package": "librtmp1",
+      "version": "2.4+20151223.gitfa8646d.1-2+b5"
+    },
+    {
+      "package": "libselinux1",
+      "version": "3.8.1-1"
+    },
+    {
+      "package": "libssh2-1t64",
+      "version": "1.11.1-1+deb13u2"
+    },
+    {
+      "package": "libzstd1",
+      "version": "1.5.7+dfsg-1"
+    },
+    {
+      "package": "perl-base",
+      "version": "5.40.1-6+deb13u1"
+    },
+    {
+      "package": "zlib1g",
+      "version": "1:1.3.dfsg+really1.3.1-1+b1"
+    }
+  ],
+  "dependency_resolution": [
+    {
+      "package": "git",
+      "kind": "Depends",
+      "alternatives": [
+        {
+          "package": "libc6",
+          "version": "2.38",
+          "operator": ">="
+        }
+      ],
+      "satisfied_by": {
+        "package": "libc6",
+        "version": "2.41-12+deb13u4",
+        "source": "base-image"
+      }
+    },
+    {
+      "package": "git",
+      "kind": "Depends",
+      "alternatives": [
+        {
+          "package": "libcurl3t64-gnutls",
+          "version": "7.56.1",
+          "operator": ">="
+        }
+      ],
+      "satisfied_by": {
+        "package": "libcurl3t64-gnutls",
+        "version": "8.14.1-2+deb13u5",
+        "source": "locked-deb"
+      }
+    },
+    {
+      "package": "git",
+      "kind": "Depends",
+      "alternatives": [
+        {
+          "package": "libexpat1",
+          "version": "2.0.1",
+          "operator": ">="
+        }
+      ],
+      "satisfied_by": {
+        "package": "libexpat1",
+        "version": "2.8.3-1~deb13u1",
+        "source": "base-image"
+      }
+    },
+    {
+      "package": "git",
+      "kind": "Depends",
+      "alternatives": [
+        {
+          "package": "libpcre2-8-0",
+          "version": "10.34",
+          "operator": ">="
+        }
+      ],
+      "satisfied_by": {
+        "package": "libpcre2-8-0",
+        "version": "10.46-1~deb13u2",
+        "source": "base-image"
+      }
+    },
+    {
+      "package": "git",
+      "kind": "Depends",
+      "alternatives": [
+        {
+          "package": "zlib1g",
+          "version": "1:1.2.2",
+          "operator": ">="
+        }
+      ],
+      "satisfied_by": {
+        "package": "zlib1g",
+        "version": "1:1.3.dfsg+really1.3.1-1+b1",
+        "source": "base-image"
+      }
+    },
+    {
+      "package": "git",
+      "kind": "Depends",
+      "alternatives": [
+        {
+          "package": "perl",
+          "version": "",
+          "operator": ""
+        }
+      ],
+      "satisfied_by": {
+        "package": "perl",
+        "version": "5.40.1-6+deb13u1",
+        "source": "locked-deb"
+      }
+    },
+    {
+      "package": "git",
+      "kind": "Depends",
+      "alternatives": [
+        {
+          "package": "liberror-perl",
+          "version": "",
+          "operator": ""
+        }
+      ],
+      "satisfied_by": {
+        "package": "liberror-perl",
+        "version": "0.17030-1",
+        "source": "locked-deb"
+      }
+    },
+    {
+      "package": "git",
+      "kind": "Depends",
+      "alternatives": [
+        {
+          "package": "git-man",
+          "version": "1:2.47.3",
+          "operator": ">"
+        }
+      ],
+      "satisfied_by": {
+        "package": "git-man",
+        "version": "1:2.47.3-0+deb13u1",
+        "source": "locked-deb"
+      }
+    },
+    {
+      "package": "git",
+      "kind": "Depends",
+      "alternatives": [
+        {
+          "package": "git-man",
+          "version": "1:2.47.3-.",
+          "operator": "<"
+        }
+      ],
+      "satisfied_by": {
+        "package": "git-man",
+        "version": "1:2.47.3-0+deb13u1",
+        "source": "locked-deb"
+      }
+    },
+    {
+      "package": "bubblewrap",
+      "kind": "Depends",
+      "alternatives": [
+        {
+          "package": "libc6",
+          "version": "2.38",
+          "operator": ">="
+        }
+      ],
+      "satisfied_by": {
+        "package": "libc6",
+        "version": "2.41-12+deb13u4",
+        "source": "base-image"
+      }
+    },
+    {
+      "package": "bubblewrap",
+      "kind": "Depends",
+      "alternatives": [
+        {
+          "package": "libcap2",
+          "version": "1:2.10",
+          "operator": ">="
+        }
+      ],
+      "satisfied_by": {
+        "package": "libcap2",
+        "version": "1:2.75-10+deb13u1+b3",
+        "source": "base-image"
+      }
+    },
+    {
+      "package": "bubblewrap",
+      "kind": "Depends",
+      "alternatives": [
+        {
+          "package": "libselinux1",
+          "version": "3.1~",
+          "operator": ">="
+        }
+      ],
+      "satisfied_by": {
+        "package": "libselinux1",
+        "version": "3.8.1-1",
+        "source": "base-image"
+      }
+    },
+    {
+      "package": "libcurl3t64-gnutls",
+      "kind": "Depends",
+      "alternatives": [
+        {
+          "package": "libbrotli1",
+          "version": "0.6.0",
+          "operator": ">="
+        }
+      ],
+      "satisfied_by": {
+        "package": "libbrotli1",
+        "version": "1.1.0-2+b7",
+        "source": "base-image"
+      }
+    },
+    {
+      "package": "libcurl3t64-gnutls",
+      "kind": "Depends",
+      "alternatives": [
+        {
+          "package": "libc6",
+          "version": "2.38",
+          "operator": ">="
+        }
+      ],
+      "satisfied_by": {
+        "package": "libc6",
+        "version": "2.41-12+deb13u4",
+        "source": "base-image"
+      }
+    },
+    {
+      "package": "libcurl3t64-gnutls",
+      "kind": "Depends",
+      "alternatives": [
+        {
+          "package": "libgnutls30t64",
+          "version": "3.8.6",
+          "operator": ">="
+        }
+      ],
+      "satisfied_by": {
+        "package": "libgnutls30t64",
+        "version": "3.8.9-3+deb13u4",
+        "source": "base-image"
+      }
+    },
+    {
+      "package": "libcurl3t64-gnutls",
+      "kind": "Depends",
+      "alternatives": [
+        {
+          "package": "libgssapi-krb5-2",
+          "version": "1.17",
+          "operator": ">="
+        }
+      ],
+      "satisfied_by": {
+        "package": "libgssapi-krb5-2",
+        "version": "1.21.3-5+deb13u1",
+        "source": "base-image"
+      }
+    },
+    {
+      "package": "libcurl3t64-gnutls",
+      "kind": "Depends",
+      "alternatives": [
+        {
+          "package": "libidn2-0",
+          "version": "2.0.0",
+          "operator": ">="
+        }
+      ],
+      "satisfied_by": {
+        "package": "libidn2-0",
+        "version": "2.3.8-2",
+        "source": "base-image"
+      }
+    },
+    {
+      "package": "libcurl3t64-gnutls",
+      "kind": "Depends",
+      "alternatives": [
+        {
+          "package": "libldap2",
+          "version": "2.6.2",
+          "operator": ">="
+        }
+      ],
+      "satisfied_by": {
+        "package": "libldap2",
+        "version": "2.6.10+dfsg-1",
+        "source": "base-image"
+      }
+    },
+    {
+      "package": "libcurl3t64-gnutls",
+      "kind": "Depends",
+      "alternatives": [
+        {
+          "package": "libnettle8t64",
+          "version": "",
+          "operator": ""
+        }
+      ],
+      "satisfied_by": {
+        "package": "libnettle8t64",
+        "version": "3.10.1-1",
+        "source": "base-image"
+      }
+    },
+    {
+      "package": "libcurl3t64-gnutls",
+      "kind": "Depends",
+      "alternatives": [
+        {
+          "package": "libnghttp2-14",
+          "version": "1.50.0",
+          "operator": ">="
+        }
+      ],
+      "satisfied_by": {
+        "package": "libnghttp2-14",
+        "version": "1.64.0-1.1+deb13u1",
+        "source": "base-image"
+      }
+    },
+    {
+      "package": "libcurl3t64-gnutls",
+      "kind": "Depends",
+      "alternatives": [
+        {
+          "package": "libnghttp3-9",
+          "version": "0.15.0",
+          "operator": ">="
+        }
+      ],
+      "satisfied_by": {
+        "package": "libnghttp3-9",
+        "version": "1.8.0-1",
+        "source": "base-image"
+      }
+    },
+    {
+      "package": "libcurl3t64-gnutls",
+      "kind": "Depends",
+      "alternatives": [
+        {
+          "package": "libngtcp2-16",
+          "version": "1.1.0",
+          "operator": ">="
+        }
+      ],
+      "satisfied_by": {
+        "package": "libngtcp2-16",
+        "version": "1.11.0-1+deb13u1",
+        "source": "locked-deb"
+      }
+    },
+    {
+      "package": "libcurl3t64-gnutls",
+      "kind": "Depends",
+      "alternatives": [
+        {
+          "package": "libngtcp2-crypto-gnutls8",
+          "version": "1.1.0",
+          "operator": ">="
+        }
+      ],
+      "satisfied_by": {
+        "package": "libngtcp2-crypto-gnutls8",
+        "version": "1.11.0-1+deb13u1",
+        "source": "locked-deb"
+      }
+    },
+    {
+      "package": "libcurl3t64-gnutls",
+      "kind": "Depends",
+      "alternatives": [
+        {
+          "package": "libpsl5t64",
+          "version": "0.16.0",
+          "operator": ">="
+        }
+      ],
+      "satisfied_by": {
+        "package": "libpsl5t64",
+        "version": "0.21.2-1.1+b1",
+        "source": "base-image"
+      }
+    },
+    {
+      "package": "libcurl3t64-gnutls",
+      "kind": "Depends",
+      "alternatives": [
+        {
+          "package": "librtmp1",
+          "version": "2.3",
+          "operator": ">="
+        }
+      ],
+      "satisfied_by": {
+        "package": "librtmp1",
+        "version": "2.4+20151223.gitfa8646d.1-2+b5",
+        "source": "base-image"
+      }
+    },
+    {
+      "package": "libcurl3t64-gnutls",
+      "kind": "Depends",
+      "alternatives": [
+        {
+          "package": "libssh2-1t64",
+          "version": "1.11.1",
+          "operator": ">="
+        }
+      ],
+      "satisfied_by": {
+        "package": "libssh2-1t64",
+        "version": "1.11.1-1+deb13u2",
+        "source": "base-image"
+      }
+    },
+    {
+      "package": "libcurl3t64-gnutls",
+      "kind": "Depends",
+      "alternatives": [
+        {
+          "package": "libzstd1",
+          "version": "1.5.5",
+          "operator": ">="
+        }
+      ],
+      "satisfied_by": {
+        "package": "libzstd1",
+        "version": "1.5.7+dfsg-1",
+        "source": "base-image"
+      }
+    },
+    {
+      "package": "libcurl3t64-gnutls",
+      "kind": "Depends",
+      "alternatives": [
+        {
+          "package": "zlib1g",
+          "version": "1:1.2.3.4",
+          "operator": ">="
+        }
+      ],
+      "satisfied_by": {
+        "package": "zlib1g",
+        "version": "1:1.3.dfsg+really1.3.1-1+b1",
+        "source": "base-image"
+      }
+    },
+    {
+      "package": "perl",
+      "kind": "Depends",
+      "alternatives": [
+        {
+          "package": "perl-base",
+          "version": "5.40.1-6+deb13u1",
+          "operator": "="
+        }
+      ],
+      "satisfied_by": {
+        "package": "perl-base",
+        "version": "5.40.1-6+deb13u1",
+        "source": "base-image"
+      }
+    },
+    {
+      "package": "perl",
+      "kind": "Depends",
+      "alternatives": [
+        {
+          "package": "perl-modules-5.40",
+          "version": "5.40.1-6+deb13u1",
+          "operator": ">="
+        }
+      ],
+      "satisfied_by": {
+        "package": "perl-modules-5.40",
+        "version": "5.40.1-6+deb13u1",
+        "source": "locked-deb"
+      }
+    },
+    {
+      "package": "perl",
+      "kind": "Depends",
+      "alternatives": [
+        {
+          "package": "libperl5.40",
+          "version": "5.40.1-6+deb13u1",
+          "operator": "="
+        }
+      ],
+      "satisfied_by": {
+        "package": "libperl5.40",
+        "version": "5.40.1-6+deb13u1",
+        "source": "locked-deb"
+      }
+    },
+    {
+      "package": "liberror-perl",
+      "kind": "Depends",
+      "alternatives": [
+        {
+          "package": "perl:any",
+          "version": "",
+          "operator": ""
+        }
+      ],
+      "satisfied_by": {
+        "package": "perl",
+        "version": "5.40.1-6+deb13u1",
+        "source": "locked-deb"
+      }
+    },
+    {
+      "package": "libngtcp2-16",
+      "kind": "Depends",
+      "alternatives": [
+        {
+          "package": "libc6",
+          "version": "2.25",
+          "operator": ">="
+        }
+      ],
+      "satisfied_by": {
+        "package": "libc6",
+        "version": "2.41-12+deb13u4",
+        "source": "base-image"
+      }
+    },
+    {
+      "package": "libngtcp2-crypto-gnutls8",
+      "kind": "Depends",
+      "alternatives": [
+        {
+          "package": "libc6",
+          "version": "2.14",
+          "operator": ">="
+        }
+      ],
+      "satisfied_by": {
+        "package": "libc6",
+        "version": "2.41-12+deb13u4",
+        "source": "base-image"
+      }
+    },
+    {
+      "package": "libngtcp2-crypto-gnutls8",
+      "kind": "Depends",
+      "alternatives": [
+        {
+          "package": "libgnutls30t64",
+          "version": "3.8.2",
+          "operator": ">="
+        }
+      ],
+      "satisfied_by": {
+        "package": "libgnutls30t64",
+        "version": "3.8.9-3+deb13u4",
+        "source": "base-image"
+      }
+    },
+    {
+      "package": "libngtcp2-crypto-gnutls8",
+      "kind": "Depends",
+      "alternatives": [
+        {
+          "package": "libngtcp2-16",
+          "version": "1.1.0",
+          "operator": ">="
+        }
+      ],
+      "satisfied_by": {
+        "package": "libngtcp2-16",
+        "version": "1.11.0-1+deb13u1",
+        "source": "locked-deb"
+      }
+    },
+    {
+      "package": "perl-modules-5.40",
+      "kind": "Depends",
+      "alternatives": [
+        {
+          "package": "perl-base",
+          "version": "5.40.1-1",
+          "operator": ">="
+        }
+      ],
+      "satisfied_by": {
+        "package": "perl-base",
+        "version": "5.40.1-6+deb13u1",
+        "source": "base-image"
+      }
+    },
+    {
+      "package": "libperl5.40",
+      "kind": "Depends",
+      "alternatives": [
+        {
+          "package": "libbz2-1.0",
+          "version": "",
+          "operator": ""
+        }
+      ],
+      "satisfied_by": {
+        "package": "libbz2-1.0",
+        "version": "1.0.8-6",
+        "source": "base-image"
+      }
+    },
+    {
+      "package": "libperl5.40",
+      "kind": "Depends",
+      "alternatives": [
+        {
+          "package": "libc6",
+          "version": "2.38",
+          "operator": ">="
+        }
+      ],
+      "satisfied_by": {
+        "package": "libc6",
+        "version": "2.41-12+deb13u4",
+        "source": "base-image"
+      }
+    },
+    {
+      "package": "libperl5.40",
+      "kind": "Depends",
+      "alternatives": [
+        {
+          "package": "libcrypt1",
+          "version": "1:4.1.0",
+          "operator": ">="
+        }
+      ],
+      "satisfied_by": {
+        "package": "libcrypt1",
+        "version": "1:4.4.38-1",
+        "source": "base-image"
+      }
+    },
+    {
+      "package": "libperl5.40",
+      "kind": "Depends",
+      "alternatives": [
+        {
+          "package": "libdb5.3t64",
+          "version": "",
+          "operator": ""
+        }
+      ],
+      "satisfied_by": {
+        "package": "libdb5.3t64",
+        "version": "5.3.28+dfsg2-9",
+        "source": "base-image"
+      }
+    },
+    {
+      "package": "libperl5.40",
+      "kind": "Depends",
+      "alternatives": [
+        {
+          "package": "libgdbm-compat4t64",
+          "version": "1.18-3",
+          "operator": ">="
+        }
+      ],
+      "satisfied_by": {
+        "package": "libgdbm-compat4t64",
+        "version": "1.24-2",
+        "source": "locked-deb"
+      }
+    },
+    {
+      "package": "libperl5.40",
+      "kind": "Depends",
+      "alternatives": [
+        {
+          "package": "libgdbm6t64",
+          "version": "1.21",
+          "operator": ">="
+        }
+      ],
+      "satisfied_by": {
+        "package": "libgdbm6t64",
+        "version": "1.24-2",
+        "source": "base-image"
+      }
+    },
+    {
+      "package": "libperl5.40",
+      "kind": "Depends",
+      "alternatives": [
+        {
+          "package": "zlib1g",
+          "version": "1:1.2.3.4",
+          "operator": ">="
+        }
+      ],
+      "satisfied_by": {
+        "package": "zlib1g",
+        "version": "1:1.3.dfsg+really1.3.1-1+b1",
+        "source": "base-image"
+      }
+    },
+    {
+      "package": "libperl5.40",
+      "kind": "Depends",
+      "alternatives": [
+        {
+          "package": "perl-modules-5.40",
+          "version": "5.40.1-6+deb13u1",
+          "operator": ">="
+        }
+      ],
+      "satisfied_by": {
+        "package": "perl-modules-5.40",
+        "version": "5.40.1-6+deb13u1",
+        "source": "locked-deb"
+      }
+    },
+    {
+      "package": "libgdbm-compat4t64",
+      "kind": "Depends",
+      "alternatives": [
+        {
+          "package": "libc6",
+          "version": "2.33",
+          "operator": ">="
+        }
+      ],
+      "satisfied_by": {
+        "package": "libc6",
+        "version": "2.41-12+deb13u4",
+        "source": "base-image"
+      }
+    },
+    {
+      "package": "libgdbm-compat4t64",
+      "kind": "Depends",
+      "alternatives": [
+        {
+          "package": "libgdbm6t64",
+          "version": "1.16",
+          "operator": ">="
+        }
+      ],
+      "satisfied_by": {
+        "package": "libgdbm6t64",
+        "version": "1.24-2",
+        "source": "base-image"
+      }
+    }
+  ],
+  "installation": {
+    "scope": "Disposable guest only, after byte verification. Never install these packages on the host.",
+    "base_image_required": true,
+    "no_existing_package_upgrades": true,
+    "include_recommends": false,
+    "include_suggests": false,
+    "pre_depends_satisfied_by_base": true,
+    "conflicts_or_breaks_in_planned_state": [],
+    "argv_template": [
+      "dpkg",
+      "--install",
+      "<VERIFIED_DEBS_IN_INSTALL_ORDER>"
+    ],
+    "network_required_during_install": false,
+    "fallback_package_resolution_allowed": false,
+    "post_install_checks": [
+      "dpkg --audit",
+      "git --version",
+      "bwrap --version"
+    ],
+    "post_install_requirement": "Query dpkg for every locked package and required base package; versions must match the lock exactly. Verify expected tools and namespace behavior before recovery scenarios.",
+    "limitation": "This lock verifies download integrity, package control metadata and required dependency closure. Guest dpkg configuration scripts, kernel namespace support and runtime execution remain unproven until the disposable guest run."
+  },
+  "provenance": {
+    "trust_bootstrap": "No Debian archive keyring existed on the host. Public keys fetched over HTTPS from ftp-master.debian.org, primary fingerprints matched official keys.html values. HTTPS bootstrap; not a preexisting independently trusted host keyring.",
+    "key_fingerprint_source": {
+      "url": "https://ftp-master.debian.org/keys.html",
+      "size": 10718,
+      "sha256": "b271f4c351a3b54f6a6be9667bb834809d12ee514055b903ccb06839d274e3e0"
+    },
+    "keys": [
+      {
+        "url": "https://ftp-master.debian.org/keys/archive-key-13.asc",
+        "size": 11861,
+        "sha256": "6f1d277429dd7ffedcc6f8688a7ad9a458859b1139ffa026d1eeaadcbffb0da7",
+        "primary_fingerprint": "04B54C3CDCA79751B16BC6B5225629DF75B188BD",
+        "all_fingerprints": [
+          "04B54C3CDCA79751B16BC6B5225629DF75B188BD",
+          "B8E5F13176D2A7A75220028078DBA3BC47EF2265"
+        ],
+        "fingerprint_matches_official_page": true
+      },
+      {
+        "url": "https://ftp-master.debian.org/keys/release-13.asc",
+        "size": 1384,
+        "sha256": "4d097bb93f83d731f475c5b92a0c2fcf108cfce1d4932792fca72d00b48d198b",
+        "primary_fingerprint": "41587F7DB8C774BCCF131416762F67A0B2C39DE4",
+        "all_fingerprints": [
+          "41587F7DB8C774BCCF131416762F67A0B2C39DE4"
+        ],
+        "fingerprint_matches_official_page": true
+      },
+      {
+        "url": "https://ftp-master.debian.org/keys/archive-key-12.asc",
+        "size": 11861,
+        "sha256": "c2a9a16fde95e037bafd0fa6b7e31f41b4ff1e85851de5558f19a2a2f0e955e2",
+        "primary_fingerprint": "B8B80B5B623EAB6AD8775C45B7C5D7D6350947F8",
+        "all_fingerprints": [
+          "B8B80B5B623EAB6AD8775C45B7C5D7D6350947F8",
+          "4CB50190207B4758A3F73A796ED0E7B82643E131"
+        ],
+        "fingerprint_matches_official_page": true
+      }
+    ],
+    "signed_index": {
+      "suite": "trixie",
+      "retrieved_at": "2026-09-21T14:47:36.326492+00:00",
+      "inrelease": {
+        "url": "https://deb.debian.org/debian/dists/trixie/InRelease",
+        "size": 140421,
+        "sha256": "0584fba32e13e0ab8285fb16c27adea1ec03a73669c18702821094fd6ca86675"
+      },
+      "gpgv_command": [
+        "gpgv",
+        "--homedir",
+        "<METADATA_ROOT>/gnupg",
+        "--keyring",
+        "<METADATA_ROOT>/debian-bootstrap.gpg",
+        "--status-fd",
+        "1",
+        "<METADATA_ROOT>/trixie/InRelease"
+      ],
+      "gpgv_exit_code": 0,
+      "valid_signatures": [
+        [
+          "4CB50190207B4758A3F73A796ED0E7B82643E131",
+          "2026-09-12",
+          "1789199778",
+          "0",
+          "4",
+          "0",
+          "1",
+          "8",
+          "01",
+          "B8B80B5B623EAB6AD8775C45B7C5D7D6350947F8"
+        ],
+        [
+          "B8E5F13176D2A7A75220028078DBA3BC47EF2265",
+          "2026-09-12",
+          "1789199779",
+          "0",
+          "4",
+          "0",
+          "1",
+          "8",
+          "01",
+          "04B54C3CDCA79751B16BC6B5225629DF75B188BD"
+        ],
+        [
+          "41587F7DB8C774BCCF131416762F67A0B2C39DE4",
+          "2026-09-12",
+          "1789199867",
+          "0",
+          "4",
+          "0",
+          "22",
+          "8",
+          "01",
+          "41587F7DB8C774BCCF131416762F67A0B2C39DE4"
+        ]
+      ],
+      "release_dates": {
+        "Date": "Sat, 12 Sep 2026 07:55:41 UTC"
+      },
+      "freshness": "no_valid_until_in_signed_stable_release",
+      "package_index": {
+        "url": "https://deb.debian.org/debian/dists/trixie/main/binary-amd64/Packages.xz",
+        "size": 9678380,
+        "sha256": "7778d3e3f303b7ddb8ce0fe7c8d57473a076c6bf2e8f241f75421d2396352498"
+      },
+      "release_checksum_verified": true,
+      "plain_index": {
+        "sha256": "4f2c68d67001d595fbd343f6dbad44468953a51c4d9dec3a4803249f6e295940",
+        "size": 56620099
+      },
+      "plain_release_checksum_verified": true
+    },
+    "selected_suite": "trixie/main amd64",
+    "selection_policy": "Pin authenticated stable-main versions matching the dated image; resolve required Depends and Pre-Depends against existing image packages first. This is not an upgrade-to-latest policy.",
+    "image_manifest": {
+      "url": "https://cloud.debian.org/images/cloud/trixie/20260914-2601/debian-13-genericcloud-amd64-20260914-2601.json",
+      "sha256": "8c0c08953444827b5be3679f99f8c06102b5e54e9fab98ad5d49a653646df278",
+      "size_bytes": 50846,
+      "source_record_sha256": "19c77fe3a6aaa4457490f6e5dcab738b8b80dd860ade76a4501f7263d6b00238",
+      "upstream_image_signature_verified": false
+    }
+  },
+  "validation": {
+    "cached_download_sha256_and_size_verified": true,
+    "package_control_metadata_verified": true,
+    "required_dependency_clauses_verified": 47,
+    "resolver": "apt_pkg 2.8.3 Debian version/constraint semantics; explicit amd64/all binary records and base-image manifest. No virtual provider was required.",
+    "host_packages_installed": false,
+    "guest_started": false,
+    "content_hash_rule": "Record SHA256 of exact guest-packages-lock.json bytes in the execution evidence packet."
+  }
+}

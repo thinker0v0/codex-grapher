@@ -18,6 +18,12 @@ import copy
 from pathlib import Path
 from typing import Any
 
+if __package__:
+    from .sqlite_runtime import connect_database
+else:
+    # The explicit legacy installer places these two modules side by side.
+    from sqlite_runtime import connect_database
+
 
 TERMINAL = {
     "REJECTED", "CANCELLED", "FAILED_PERMANENT", "FAILED_BUDGET",
@@ -158,13 +164,14 @@ def validate_contract(contract: dict[str, Any]) -> None:
 
 
 class TaskController:
-    def __init__(self, database: Path):
+    def __init__(self, database: Path, *, sqlite_profile: str = "delete-extra",
+                 sqlite_attestation: Path | None = None):
         self.database = database
         os.umask(0o077)
-        self.connection = sqlite3.connect(database)
+        self.connection = connect_database(database, create=True, profile=sqlite_profile,
+                                           attestation=sqlite_attestation)
         os.chmod(database, 0o600)
         self.connection.row_factory = sqlite3.Row
-        self.connection.execute("PRAGMA journal_mode=WAL")
         self.connection.execute("PRAGMA foreign_keys=ON")
         self.connection.executescript(
             """

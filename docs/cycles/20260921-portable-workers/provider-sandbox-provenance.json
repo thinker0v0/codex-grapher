@@ -1,0 +1,219 @@
+{
+  "cli_version": "codex-cli 0.155.1",
+  "date": "2026-09-21",
+  "kind": "provider-sandbox-compatibility-inventory",
+  "native_executable_sha256": "0753dfe1d8b87a52436deb13eb1c549661ef4c84fee2c5aa688385eebeccb761",
+  "official_sources": [
+    "https://learn.chatgpt.com/docs/agent-approvals-security",
+    "https://learn.chatgpt.com/docs/sandboxing",
+    "https://learn.chatgpt.com/docs/config-schema.json"
+  ],
+  "provenance_limit": "Observed installed npm metadata and executable identity, not signed download chain or reproducible vendor build.",
+  "results": [
+    {
+      "bytes": 3938,
+      "record": "sandbox-compat-isolated-probe-v4-native.json",
+      "records": [
+        {
+          "case": "default",
+          "descendants_reaped": true,
+          "elapsed_seconds": 0.05246660695411265,
+          "exit_code": 1,
+          "observation": {
+            "actual_gid": 1000,
+            "actual_uid": 1000,
+            "capabilities": {
+              "ambient": "0000000000000000",
+              "bounding": "0000000000000000",
+              "effective": "0000000000000000",
+              "inheritable": "0000000000000000",
+              "permitted": "0000000000000000"
+            },
+            "namespaces": {
+              "ipc": 4026532689,
+              "mount": 4026532687,
+              "net": 4026532691,
+              "pid": 4026532690,
+              "user": 4026531837
+            },
+            "no_new_privs": true
+          },
+          "output_overflow": false,
+          "outputs": {
+            "stderr": {
+              "bytes": 208,
+              "sha256": "f584d723d6016799815da1fe797c1cb4d40b556ab350e3d7b78d3d12d7febf46"
+            },
+            "stdout": {
+              "bytes": 0,
+              "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+            }
+          },
+          "timed_out": false
+        },
+        {
+          "case": "legacy",
+          "descendants_reaped": true,
+          "elapsed_seconds": 0.04076509899459779,
+          "exit_code": 101,
+          "observation": {
+            "actual_gid": 1000,
+            "actual_uid": 1000,
+            "capabilities": {
+              "ambient": "0000000000000000",
+              "bounding": "0000000000000000",
+              "effective": "0000000000000000",
+              "inheritable": "0000000000000000",
+              "permitted": "0000000000000000"
+            },
+            "namespaces": {
+              "ipc": 4026532690,
+              "mount": 4026532687,
+              "net": 4026532749,
+              "pid": 4026532748,
+              "user": 4026531837
+            },
+            "no_new_privs": true
+          },
+          "output_overflow": false,
+          "outputs": {
+            "stderr": {
+              "bytes": 254,
+              "sha256": "8ef2e83e73342905a1ad03649cde3e60af489b80b1cdc1c01f40798455080306"
+            },
+            "stdout": {
+              "bytes": 0,
+              "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+            }
+          },
+          "timed_out": false
+        }
+      ],
+      "scope": "non-inference actual isolated runner; native CLI; UID1000 empty synthetic home/no authentication mounted",
+      "sha256": "a35c2b8ce6e46ea36b36609c5fef4f60b14c50933a1ab13e43ce05fa5523ceb4",
+      "source_sha256": "8f42a3b92937187147aa814163150bc1cd11987c4339eaa2d5da59b8e95f6840"
+    },
+    {
+      "bytes": 10974,
+      "record": "sandbox-external-mode-probe.json",
+      "records": [
+        {
+          "case": "native-version",
+          "descendants_reaped": true,
+          "elapsed_seconds": 0.0401883089216426,
+          "exit_code": 0,
+          "observation": {
+            "actual_gid": 1000,
+            "actual_uid": 1000,
+            "capabilities": {
+              "ambient": "0000000000000000",
+              "bounding": "0000000000000000",
+              "effective": "0000000000000000",
+              "inheritable": "0000000000000000",
+              "permitted": "0000000000000000"
+            },
+            "namespaces": {
+              "ipc": 4026532689,
+              "mount": 4026532687,
+              "net": 4026532691,
+              "pid": 4026532690,
+              "user": 4026531837
+            },
+            "no_new_privs": true
+          },
+          "output_overflow": false,
+          "outputs": {
+            "stderr": {
+              "bytes": 0,
+              "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+            },
+            "stdout": {
+              "bytes": 18,
+              "sha256": "556478dd38e6185a3ceef8e5237286acd48d89da460cdbbc054ce7230b0caced"
+            }
+          },
+          "timed_out": false
+        },
+        {
+          "case": "native-exec-help",
+          "descendants_reaped": true,
+          "elapsed_seconds": 0.025326349074020982,
+          "exit_code": 0,
+          "observation": {
+            "actual_gid": 1000,
+            "actual_uid": 1000,
+            "capabilities": {
+              "ambient": "0000000000000000",
+              "bounding": "0000000000000000",
+              "effective": "0000000000000000",
+              "inheritable": "0000000000000000",
+              "permitted": "0000000000000000"
+            },
+            "namespaces": {
+              "ipc": 4026532689,
+              "mount": 4026532687,
+              "net": 4026532745,
+              "pid": 4026532690,
+              "user": 4026531837
+            },
+            "no_new_privs": true
+          },
+          "output_overflow": false,
+          "outputs": {
+            "stderr": {
+              "bytes": 0,
+              "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+            },
+            "stdout": {
+              "bytes": 4031,
+              "sha256": "0e82cfde0122715250e93dc65866caa956b2ac5b9d0b20ec4ad4f9e81486509e"
+            }
+          },
+          "timed_out": false
+        },
+        {
+          "case": "external-mode",
+          "descendants_reaped": true,
+          "elapsed_seconds": 0.0621968749910593,
+          "exit_code": 0,
+          "observation": {
+            "actual_gid": 1000,
+            "actual_uid": 1000,
+            "capabilities": {
+              "ambient": "0000000000000000",
+              "bounding": "0000000000000000",
+              "effective": "0000000000000000",
+              "inheritable": "0000000000000000",
+              "permitted": "0000000000000000"
+            },
+            "namespaces": {
+              "ipc": 4026532689,
+              "mount": 4026532687,
+              "net": 4026532691,
+              "pid": 4026532690,
+              "user": 4026531837
+            },
+            "no_new_privs": true
+          },
+          "output_overflow": false,
+          "outputs": {
+            "stderr": {
+              "bytes": 0,
+              "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+            },
+            "stdout": {
+              "bytes": 423,
+              "sha256": "10d08b836339914bac527a18166792498c157c01eed42a0cacccc50d17c7d3f1"
+            }
+          },
+          "timed_out": false
+        }
+      ],
+      "scope": "non-inference actual isolated runner; externally enforced sandbox; UID1000 empty synthetic home/no authentication mounted/no network namespace access",
+      "sha256": "2469b0d0f37770299e6cccd5d481274b2122a0eebe5f7c81c72102ea7eb6e58c",
+      "source_sha256": "8f42a3b92937187147aa814163150bc1cd11987c4339eaa2d5da59b8e95f6840"
+    }
+  ],
+  "schema_version": 1,
+  "scope": "No inference, no mounted authentication; compatibility observations only; no release pass. Raw synthetic-fixture records retained in evaluation packet."
+}

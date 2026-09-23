@@ -18,6 +18,26 @@ ROOT = pathlib.Path(__file__).resolve().parents[1]
 
 
 class FoundationTests(unittest.TestCase):
+    def test_standalone_controller_install_includes_sqlite_runtime(self):
+        installer = (ROOT / "scripts/configure-codex-workers.sh").read_text()
+        with tempfile.TemporaryDirectory() as temporary:
+            staged = pathlib.Path(temporary)
+            for module in ("task_controller.py", "sqlite_runtime.py"):
+                self.assertRegex(installer, r'install [^\n]*"\$repo_root/control_plane/' +
+                                 re.escape(module) + r'" /usr/local/libexec/ai-ops/' + re.escape(module))
+                shutil.copyfile(ROOT / "control_plane" / module, staged / module)
+            result = subprocess.run(
+                [sys.executable, "-I", "-B", "-c",
+                 "import pathlib,sys; sys.path.insert(0,sys.argv[1]); "
+                 "from task_controller import TaskController; "
+                 "c=TaskController(pathlib.Path(sys.argv[1])/'task.sqlite'); "
+                 "assert c.connection.execute('PRAGMA journal_mode').fetchone()[0]=='delete'; "
+                 "assert c.connection.execute('PRAGMA synchronous').fetchone()[0]==3; "
+                 "c.connection.close()", str(staged)],
+                cwd=staged, capture_output=True, text=True, timeout=30,
+            )
+            self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+
     def test_installer_module_set_imports_without_source_checkout(self):
         installer = (ROOT / "scripts/install-project-graph.sh").read_text(encoding="utf-8")
         match = re.search(r"^modules=\(([^)]*)\)$", installer, re.MULTILINE)

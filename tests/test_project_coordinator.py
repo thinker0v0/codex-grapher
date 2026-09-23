@@ -8,6 +8,7 @@ import subprocess
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 from control_plane.buzz_native_adapter import BuzzNativeAdapter, canonical_event_id
 from control_plane.buzz_router import BuzzRouter
@@ -1464,27 +1465,24 @@ class ProjectCoordinatorTests(unittest.TestCase):
             ["human/"],
         )
         artifact_id = f"sha256:{'6' * 64}"
-        self.graph.connection.execute(
-            "INSERT INTO evidence_artifacts(artifact_id,node_id,attempt,project,"
-            "producer_project_id,manifest_sha256,manifest_relative_path,task_id,"
-            "base_sha,candidate_sha,contract_sha256,ingress_version) "
-            "VALUES(?, 'node-human',1,'opensource','oss',?,?, 'node-human',?,?,?,1)",
-            (
-                artifact_id, "6" * 64,
-                f"sha256/66/{'6' * 64}/manifest.json",
-                self.base, "d" * 40, "7" * 64,
-            ),
+        row = self.graph.lease("node-human", 0, "hermes-oss", 60)
+        row = self.graph.start(
+            "node-human", row["version"], row["lease_id"], "hermes-oss",
         )
-        self.graph.connection.execute(
-            "UPDATE nodes SET state='NEEDS_HUMAN',version=1,attempt=1,"
-            "active_artifact_id=?,evidence_hash=? WHERE node_id='node-human'",
-            (artifact_id, "6" * 64),
+        artifact = IngressArtifact(
+            artifact_id, "6" * 64, f"sha256/66/{'6' * 64}/manifest.json",
+            "node-human", 1, "oss", self.base, "d" * 40, "7" * 64,
         )
-        self.graph._event(
-            "node-human", 1, "READY", "NEEDS_HUMAN",
-            "fixture human disposition", digest({"artifact_id": artifact_id}),
+        row = self.graph.record_ingressed_evidence(
+            "node-human", row["version"], artifact,
+        )["node"]
+        row = self.graph.claim_evidence(
+            "node-human", row["version"], artifact_id, "hermes-evaluator", 60,
+        )["node"]
+        self.graph.reject_evidence(
+            "node-human", row["version"], artifact_id, "NEEDS_HUMAN",
+            digest({"artifact_id": artifact_id}), "hermes-evaluator",
         )
-        self.graph.connection.commit()
         binding_before = self.binding.read_bytes()
         with self.assertRaisesRegex(RuntimeError, "not quiescent"):
             self.integrate()
@@ -1932,6 +1930,105 @@ class ProjectCoordinatorTests(unittest.TestCase):
             check=True, capture_output=True, text=True,
         ).stdout
         self.assertEqual(refs, "")
+
+
+class HistoricalHumanGatePromotionTests(unittest.TestCase):
+    """Persist the gate admission behavior of the pre-reliability schema-v5 runtime."""
+
+    def historical_fixture(self, phase):
+        fixture = ProjectCoordinatorTests()
+        original_add_node = ProjectGraph.add_node
+
+        def historical_add_node(graph, node_id, goal_id, kind, spec, write_set, dependencies=None):
+            if node_id == "node-1":
+                spec = {**spec, "human_gate": True}
+            return original_add_node(graph, node_id, goal_id, kind, spec, write_set, dependencies)
+
+        # The old runtime admitted human_gate tasks. Restore that admission only
+        # while producing a real persisted, signed lifecycle fixture. Closing and
+        # reopening below removes every patch before exercising current code.
+        # This representation needs no historical Git object in a shallow clone.
+        with patch.object(ProjectGraph, "add_node", historical_add_node), \
+                patch.object(ProjectGraph, "_retry_blocker", return_value=None), \
+                patch.object(ProjectGraph, "_assert_no_human_gate", staticmethod(lambda row: None)):
+            fixture.setUp()
+            self.addCleanup(fixture.tearDown)
+            if phase == "PREPARED":
+                with self.assertRaises(SimulatedCrash):
+                    fixture.integrate(crash_hook=fixture.crash_at("after_ref"))
+            elif phase == "BINDING_UPDATED":
+                with self.assertRaises(SimulatedCrash):
+                    fixture.integrate(crash_hook=fixture.crash_at("after_graph"))
+            elif phase == "COMPLETED":
+                fixture.integrate()
+        database = fixture.graph.database
+        fixture.graph.connection.close()
+        fixture.graph = ProjectGraph(database, fixture.public_key, fixture.rubric_hash)
+        self.addCleanup(fixture.graph.connection.close)
+        fixture.coordinator = ProjectCoordinator(
+            fixture.graph,
+            ProjectIntegrator(fixture.repo, fixture.binding, fixture.public_key,
+                              fixture.rubric, fixture.accepted_ref),
+            fixture.evidence_root, "oss",
+        )
+        self.assertTrue(json.loads(fixture.graph.get_node("node-1")["spec_json"])["human_gate"])
+        self.assertEqual(fixture.graph.get_node("node-1")["state"],
+                         "INTEGRATED" if phase == "COMPLETED" else "PASSED")
+        return fixture
+
+    def durable_state(self, fixture):
+        publications = fixture.coordinator.integrator.publications.root
+        return (
+            tuple(fixture.graph.connection.iterdump()),
+            fixture.binding.read_bytes(), fixture.binding.stat().st_mtime_ns,
+            subprocess.check_output([
+                "git", "-C", str(fixture.repo), "for-each-ref",
+                "--format=%(refname) %(objectname)", "refs/ai-ops/",
+            ]),
+            tuple(sorted(
+                (str(path.relative_to(publications)), path.stat().st_mode,
+                 sha256_file(path) if path.is_file() else None)
+                for path in publications.rglob("*")
+            )),
+        )
+
+    def test_reopened_historical_gated_pass_cannot_prepare_or_promote(self):
+        fixture = self.historical_fixture("PASSED")
+        before = self.durable_state(fixture)
+        with patch.object(
+            fixture.coordinator, "_prepare_attempt",
+            side_effect=AssertionError("human gate must be checked before PREPARED"),
+        ), self.assertRaisesRegex(PermissionError, "pending human gate"):
+            fixture.integrate()
+        self.assertEqual(self.durable_state(fixture), before)
+        self.assertEqual(fixture.graph.connection.execute(
+            "SELECT COUNT(*) FROM integration_attempts"
+        ).fetchone()[0], 0)
+
+    def test_reopened_historical_pending_promotion_cannot_resume_effects(self):
+        for phase in ("PREPARED", "BINDING_UPDATED"):
+            with self.subTest(phase=phase):
+                fixture = self.historical_fixture(phase)
+                before = self.durable_state(fixture)
+                self.assertEqual(fixture.graph.connection.execute(
+                    "SELECT status FROM integration_attempts"
+                ).fetchone()[0], phase)
+                with patch.object(
+                    fixture.coordinator.integrator, "reconcile_promotion",
+                    side_effect=AssertionError("human gate must be checked before physical recovery"),
+                ), self.assertRaisesRegex(PermissionError, "pending human gate"):
+                    fixture.coordinator.reconcile("node-1", fixture.candidate)
+                self.assertEqual(self.durable_state(fixture), before)
+                with self.assertRaisesRegex(PermissionError, "pending human gate"):
+                    fixture.integrate()
+                self.assertEqual(self.durable_state(fixture), before)
+
+    def test_historical_completed_gated_integration_remains_inspectable(self):
+        fixture = self.historical_fixture("COMPLETED")
+        before = self.durable_state(fixture)
+        fixture.coordinator.assert_publication_integrity()
+        self.assertEqual(fixture.coordinator.reconcile("node-1", fixture.candidate)["status"], "COMPLETED")
+        self.assertEqual(self.durable_state(fixture), before)
 
 
 if __name__ == "__main__":

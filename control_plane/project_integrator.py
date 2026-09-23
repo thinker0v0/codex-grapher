@@ -23,6 +23,7 @@ from typing import Any, Callable
 from control_plane.publication_store import PublicationPin, PublicationStore
 from control_plane.artifact_builder import safe_relative_artifact_path
 from control_plane.evidence_ingress import MANIFEST_V4_FIELDS, validate_manifest_v4
+from control_plane.evaluation_policy import TaskEvaluationPolicy, validate_task_policy
 
 REQUIRED_GATES = {f"HG{number}" for number in range(1, 12)}
 SECTION_LIMITS = {
@@ -72,11 +73,10 @@ def evaluation_ledger_hash(evaluation: dict[str, Any]) -> str:
 
 
 def _is_number(value: Any) -> bool:
-    return (
-        isinstance(value, (int, float))
-        and not isinstance(value, bool)
-        and math.isfinite(float(value))
-    )
+    try:
+        return type(value) in (int, float) and math.isfinite(value)
+    except OverflowError:
+        return False
 
 
 def _verify_openssl_signature(subject: bytes, signature: bytes, public_key: Path) -> None:
@@ -108,10 +108,26 @@ def verify_evaluation(
     expected_artifact_id: str | object = ...,
     expected_claim_id: str | object = ...,
     expected_previous_ledger_hash: str | None | object = ...,
+    evaluation_policy: TaskEvaluationPolicy | None = None,
 ) -> None:
     """Enforce the frozen score contract and verify an Ed25519 public-key signature."""
-    if not isinstance(evaluation, dict) or set(evaluation) != EVALUATION_FIELDS:
+    fields = EVALUATION_FIELDS
+    sections = SECTION_LIMITS
+    gates_required = REQUIRED_GATES
+    threshold = 95
+    if evaluation_policy is not None:
+        validate_task_policy(evaluation_policy, expected_rubric_sha256)
+        fields = fields | {"schema_version", "policy_sha256"}
+        sections = {name: (minimum, maximum) for name, minimum, maximum in evaluation_policy.sections}
+        gates_required = evaluation_policy.mandatory_gates
+        threshold = evaluation_policy.threshold
+    if not isinstance(evaluation, dict) or set(evaluation) != fields:
         raise PermissionError("evaluation does not match the exact result schema")
+    if evaluation_policy is not None:
+        if type(evaluation["schema_version"]) is not int or evaluation["schema_version"] != 4:
+            raise PermissionError("task evaluation requires schema version 4")
+        if evaluation["policy_sha256"] != evaluation_policy.sha256:
+            raise PermissionError("task evaluation policy hash mismatch")
     for field in ("evaluation_id", "task_id", "contract_id", "evaluator_identity"):
         if not isinstance(evaluation[field], str) or not evaluation[field]:
             raise PermissionError(f"evaluation {field} is invalid")
@@ -137,20 +153,20 @@ def verify_evaluation(
         raise PermissionError("evaluation signature is invalid")
 
     scores = evaluation["section_scores"]
-    if not isinstance(scores, dict) or set(scores) != set(SECTION_LIMITS):
+    if not isinstance(scores, dict) or set(scores) != set(sections):
         raise PermissionError("evaluation must contain the exact frozen section score set")
-    for section, (minimum, maximum) in SECTION_LIMITS.items():
+    for section, (minimum, maximum) in sections.items():
         score = scores[section]
         if not _is_number(score) or not minimum <= float(score) <= maximum:
             raise PermissionError(f"evaluation section minimum or maximum failed: {section}")
     total_score = evaluation["total_score"]
     if not _is_number(total_score) or abs(float(total_score) - sum(float(value) for value in scores.values())) > 1e-9:
         raise PermissionError("evaluation total does not equal its section scores")
-    if evaluation["verdict"] != "PASS" or float(total_score) < 95:
+    if evaluation["verdict"] != "PASS" or float(total_score) < threshold:
         raise PermissionError("evaluation does not meet frozen threshold")
     gates = evaluation["mandatory_gates"]
-    if not isinstance(gates, dict) or set(gates) != REQUIRED_GATES or any(result != "PASS" for result in gates.values()):
-        raise PermissionError("the exact HG1-HG11 set must all pass")
+    if not isinstance(gates, dict) or set(gates) != gates_required or any(result != "PASS" for result in gates.values()):
+        raise PermissionError("the exact frozen mandatory gate set must all pass")
     if evaluation["evaluator_identity"] != "hermes-evaluator":
         raise PermissionError("independent evaluator identity required")
     if evaluation["task_id"] != expected_task_id or evaluation["contract_id"] != expected_contract_id:
@@ -189,27 +205,81 @@ class CandidateBundle:
     contract_sha256: str
 
 
+class _VerificationPublicationStore(PublicationStore):
+    """Preserve publication reads without exposing the public creation API."""
+
+    def ensure(self, source_repo: Path, repo: str, base_sha: str,
+               metadata: os.stat_result | None = None) -> PublicationPin:
+        raise PermissionError("verification-only integrator cannot mutate publications")
+
+
 class ProjectIntegrator:
     def __init__(self, repo: Path, binding: Path, evaluator_public_key: Path,
                  rubric_path: Path, accepted_ref: str,
                  expected_binding_group: str | None = None,
-                 publication_root: Path | None = None):
+                 publication_root: Path | None = None,
+                 evaluation_policy: TaskEvaluationPolicy | None = None,
+                 *, verification_owner_uid: int | None = None):
+        """Open a publisher, or a verification-only view of a trusted owner's data.
+
+        The optional owner must come from trusted configuration, never a task or
+        binding payload. Supplying it disables mutation even for the current UID.
+        This API guard complements OS permissions; it does not sandbox Python.
+        """
+        if verification_owner_uid is not None and (
+            type(verification_owner_uid) is not int
+            or not 0 <= verification_owner_uid < 2**32 - 1
+        ):
+            raise ValueError("verification owner UID must be a valid integer UID")
+        self._verification_owner_uid = verification_owner_uid
         self.repo = repo.resolve()
         self.binding = Path(os.path.abspath(binding))
         self.evaluator_public_key = Path(os.path.abspath(evaluator_public_key))
-        self.rubric_sha256 = sha256_file(rubric_path)
+        if self.evaluator_public_key.is_symlink() or not self.evaluator_public_key.is_file():
+            raise PermissionError("evaluator public key must be a regular non-symlink file")
+        self._evaluator_public_key_sha256 = sha256_file(self.evaluator_public_key)
+        self.rubric_path = Path(os.path.abspath(rubric_path))
+        self.rubric_sha256 = sha256_file(self.rubric_path)
+        self.evaluation_policy = evaluation_policy
+        self.assert_verification_configuration()
         if not re.fullmatch(r"refs/ai-ops/accepted/[a-z]+", accepted_ref):
             raise ValueError("accepted ref is not canonical")
         self.accepted_ref = accepted_ref
         self.project = accepted_ref.rsplit("/", 1)[-1]
         self.expected_binding_group = expected_binding_group
-        self.publications = PublicationStore(
+        publication_store = (
+            PublicationStore if verification_owner_uid is None
+            else _VerificationPublicationStore
+        )
+        self.publications = publication_store(
             publication_root if publication_root is not None
             else self.binding.parent / "publications"
         )
 
+    @property
+    def verification_owner_uid(self) -> int | None:
+        return self._verification_owner_uid
+
+    def _require_mutation_authority(self) -> None:
+        if self._verification_owner_uid is not None:
+            raise PermissionError("verification-only integrator cannot mutate state")
+
+    def assert_verification_configuration(self) -> None:
+        """Refuse changed trusted key/rubric inputs before any checked effects."""
+        if self.evaluator_public_key.is_symlink() or not self.evaluator_public_key.is_file():
+            raise PermissionError("evaluator public key must be a regular non-symlink file")
+        if sha256_file(self.evaluator_public_key) != self._evaluator_public_key_sha256:
+            raise PermissionError("evaluator public key bytes changed after configuration")
+        if self.rubric_path.is_symlink() or not self.rubric_path.is_file():
+            raise PermissionError("frozen rubric must be a regular non-symlink file")
+        if sha256_file(self.rubric_path) != self.rubric_sha256:
+            raise PermissionError("frozen rubric bytes changed after configuration")
+        if self.evaluation_policy is not None:
+            validate_task_policy(self.evaluation_policy, self.rubric_sha256)
+
     @contextmanager
     def _binding_lock(self):
+        ProjectIntegrator._require_mutation_authority(self)
         lock_path = self.binding.with_suffix(self.binding.suffix + ".lock")
         descriptor = os.open(lock_path, os.O_RDWR | os.O_CREAT, 0o600)
         try:
@@ -275,17 +345,22 @@ class ProjectIntegrator:
         )
 
     def import_bundle(self, candidate: CandidateBundle) -> str:
+        ProjectIntegrator._require_mutation_authority(self)
         if sha256_file(candidate.manifest_path) != candidate.manifest_sha256:
             raise PermissionError("candidate manifest changed after preflight")
         if sha256_file(candidate.bundle_path) != candidate.bundle_sha256:
             raise PermissionError("candidate bundle changed after preflight")
         reference = f"refs/ai-ops/candidates/{candidate.task_id}/{candidate.candidate_sha}"
         subprocess.run(
-            ["git", "-C", str(self.repo), "fetch", str(candidate.bundle_path), f"HEAD:{reference}"],
+            ["git", "-C", str(self.repo), "-c", "core.fsync=all",
+             "-c", "core.fsyncMethod=fsync", "fetch", "--no-auto-maintenance",
+             str(candidate.bundle_path), f"HEAD:{reference}"],
             check=True, capture_output=True, text=True,
+            env={key: value for key, value in os.environ.items() if key != "GIT_TEST_FSYNC"},
         )
         if git(self.repo, "rev-parse", f"{reference}^{{commit}}") != candidate.candidate_sha:
             raise PermissionError("imported bundle does not match candidate SHA")
+        self._durable_canonical()
         return candidate.candidate_sha
 
     def promote(
@@ -300,9 +375,12 @@ class ProjectIntegrator:
         expected_contract_id: str,
         fault_hook: FaultHook | None = None,
     ) -> dict[str, Any]:
+        ProjectIntegrator._require_mutation_authority(self)
+        ProjectIntegrator.assert_verification_configuration(self)
         verify_evaluation(
             evaluation, self.evaluator_public_key, evidence_manifest, self.rubric_sha256,
             expected_task_id=expected_task_id, expected_contract_id=expected_contract_id,
+            evaluation_policy=self.evaluation_policy,
         )
         if evaluation["evaluated_git_sha"] != candidate_sha:
             raise PermissionError("evaluation is not bound to candidate SHA")
@@ -321,6 +399,7 @@ class ProjectIntegrator:
         evidence_manifest: Path,
         fault_hook: FaultHook | None,
     ) -> dict[str, Any]:
+        ProjectIntegrator._require_mutation_authority(self)
         current, metadata = self._read_binding()
         current_sha = current["base_sha"]
         accepted_sha = self._ref_sha(self.accepted_ref)
@@ -335,6 +414,9 @@ class ProjectIntegrator:
         publication = self.publications.ensure(
             self.repo, current["repo"], candidate_sha, metadata
         )
+        # Direct promotion may use objects created without import_bundle().
+        # Persist their closure before any accepted ref can point to them.
+        self._durable_canonical()
         if fault_hook:
             fault_hook("after_publication")
         if fault_hook:
@@ -350,6 +432,10 @@ class ProjectIntegrator:
             raise RuntimeError("rollback reference conflict")
         if accepted_sha == expected_base_sha:
             self._update_ref(self.accepted_ref, candidate_sha, expected_base_sha)
+        # Git's ref-file fsync precedes its rename; persist the directory
+        # entries too, before either the crash hook or durable binding moves.
+        # Run even when a previous process already wrote the expected refs.
+        self._durable_canonical()
         if fault_hook:
             fault_hook("after_ref")
         # Retain the historical hook name for fault-injection compatibility.
@@ -370,12 +456,15 @@ class ProjectIntegrator:
         }
 
     def promotion_started(self, candidate_sha: str) -> bool:
+        ProjectIntegrator._require_mutation_authority(self)
         with self._binding_lock():
             binding, _ = self._read_binding()
             return binding["base_sha"] == candidate_sha or self._ref_sha(self.accepted_ref) == candidate_sha
 
     def reconcile_promotion(self, expected_base_sha: str, candidate_sha: str) -> str | None:
         """Finish publication -> ref -> binding ordering, or report no side effect."""
+        ProjectIntegrator._require_mutation_authority(self)
+        ProjectIntegrator.assert_verification_configuration(self)
         with self._binding_lock():
             binding, metadata = self._read_binding()
             accepted_sha = self._ref_sha(self.accepted_ref)
@@ -388,6 +477,7 @@ class ProjectIntegrator:
             if git(self.repo, "rev-parse", f"{candidate_sha}^{{commit}}") != candidate_sha:
                 raise RuntimeError("accepted candidate object is absent during recovery")
             self.publications.ensure(self.repo, binding["repo"], candidate_sha, metadata)
+            self._durable_canonical()
             if binding["base_sha"] == expected_base_sha:
                 self._atomic_write({"repo": binding["repo"], "base_sha": candidate_sha}, metadata)
             return candidate_sha
@@ -395,6 +485,8 @@ class ProjectIntegrator:
     def rollback(self, expected_current_sha: str, *, expected_previous_sha: str | None = None,
                  fault_hook: FaultHook | None = None) -> dict[str, Any]:
         """Idempotently move the accepted ref and selector to its saved predecessor."""
+        ProjectIntegrator._require_mutation_authority(self)
+        ProjectIntegrator.assert_verification_configuration(self)
         return self.reconcile_rollback(
             expected_current_sha, expected_previous_sha=expected_previous_sha,
             require_started=False, fault_hook=fault_hook,
@@ -404,6 +496,8 @@ class ProjectIntegrator:
         self, expected_current_sha: str, *, expected_previous_sha: str | None = None,
         require_started: bool = False, fault_hook: FaultHook | None = None,
     ) -> dict[str, Any]:
+        ProjectIntegrator._require_mutation_authority(self)
+        ProjectIntegrator.assert_verification_configuration(self)
         with self._binding_lock():
             current, metadata = self._read_binding()
             previous_sha = self._ref_sha(self._rollback_ref(expected_current_sha))
@@ -423,10 +517,12 @@ class ProjectIntegrator:
             publication = self.publications.ensure(
                 self.repo, current["repo"], previous_sha, metadata
             )
+            self._durable_canonical()
             if fault_hook:
                 fault_hook("before_rollback_ref")
             if accepted_sha == expected_current_sha:
                 self._update_ref(self.accepted_ref, previous_sha, expected_current_sha)
+            self._durable_canonical()
             if fault_hook:
                 fault_hook("after_rollback_ref")
             if current["base_sha"] == expected_current_sha:
@@ -443,14 +539,19 @@ class ProjectIntegrator:
 
     def ensure_bound_publication(self) -> PublicationPin:
         """Materialize the initial bound generation without changing the selector."""
+        ProjectIntegrator._require_mutation_authority(self)
         with self._binding_lock():
             binding, metadata = self._read_binding()
             accepted_sha = self._ref_sha(self.accepted_ref)
             if accepted_sha not in {None, binding["base_sha"]}:
                 raise RuntimeError("accepted ref and worker binding disagree")
-            return self.publications.ensure(
+            publication = self.publications.ensure(
                 self.repo, binding["repo"], binding["base_sha"], metadata
             )
+            # Initial canonical snapshots are copied by the controller, not
+            # written by Git, so Git's fsync options cannot persist them.
+            self._durable_canonical(include_worktree=True)
+            return publication
 
     def _validate_candidate(self, candidate_sha: str, expected_base_sha: str, allowed_paths: list[str]) -> None:
         if not HEX40.fullmatch(candidate_sha) or not HEX40.fullmatch(expected_base_sha):
@@ -504,7 +605,11 @@ class ProjectIntegrator:
         if self.binding.is_symlink() or not self.binding.is_file():
             raise PermissionError("repository binding must be a regular non-symlink file")
         metadata = self.binding.stat()
-        if stat.S_IMODE(metadata.st_mode) != 0o440 or metadata.st_uid != os.geteuid():
+        owner_uid = (
+            os.geteuid() if self._verification_owner_uid is None
+            else self._verification_owner_uid
+        )
+        if stat.S_IMODE(metadata.st_mode) != 0o440 or metadata.st_uid != owner_uid:
             raise PermissionError("repository binding owner or mode is unsafe")
         if (self.expected_binding_group is not None
                 and metadata.st_gid != grp.getgrnam(self.expected_binding_group).gr_gid):
@@ -517,6 +622,7 @@ class ProjectIntegrator:
         return {"repo": value["repo"], "base_sha": value["base_sha"]}, metadata
 
     def _atomic_write(self, value: dict[str, str], metadata: os.stat_result) -> None:
+        ProjectIntegrator._require_mutation_authority(self)
         descriptor, temporary = tempfile.mkstemp(prefix=f".{self.binding.name}.", dir=self.binding.parent)
         try:
             os.fchmod(descriptor, stat.S_IMODE(metadata.st_mode))
@@ -550,16 +656,99 @@ class ProjectIntegrator:
         return completed.stdout.strip() if completed.returncode == 0 else None
 
     def _update_ref(self, reference: str, new_sha: str, old_sha: str | None) -> None:
-        command = ["git", "-C", str(self.repo), "update-ref", reference, new_sha]
+        ProjectIntegrator._require_mutation_authority(self)
+        command = ["git", "-C", str(self.repo), "-c", "core.fsync=all",
+                   "-c", "core.fsyncMethod=fsync", "update-ref", reference, new_sha]
         command.append(old_sha if old_sha is not None else "0" * 40)
-        subprocess.run(command, check=True, capture_output=True, text=True)
+        subprocess.run(
+            command, check=True, capture_output=True, text=True,
+            env={key: value for key, value in os.environ.items() if key != "GIT_TEST_FSYNC"},
+        )
+        # In particular, the saved rollback ref must be durable before the
+        # next CAS can advance the accepted ref to the candidate.
+        self._durable_canonical()
+
+    def _durable_canonical(self, *, include_worktree: bool = False) -> None:
+        """Flush the owned Git closure before acknowledging publication effects.
+
+        Git 2.47's files backend can fsync a reference lock before renaming it,
+        but does not fsync the containing directories. Flush all metadata and
+        objects (loose or packed), then directories from leaves to root. The
+        controller's existing exclusive writer barriers exclude other writers.
+        A failure propagates before the binding or publication journal advances.
+
+        Descriptor-relative traversal never follows links or opens special
+        files. Worktree symlinks, supported by legacy repositories, are skipped;
+        only their directory entries are flushed. Git metadata may have none.
+        """
+        ProjectIntegrator._require_mutation_authority(self)
+        directory_flags = os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW | os.O_CLOEXEC
+        file_flags = os.O_RDONLY | os.O_NOFOLLOW | os.O_CLOEXEC | os.O_NONBLOCK
+        owner = os.geteuid()
+
+        def validate(metadata: os.stat_result, *, directory: bool) -> None:
+            expected_type = stat.S_ISDIR if directory else stat.S_ISREG
+            if not expected_type(metadata.st_mode) or metadata.st_uid != owner:
+                raise PermissionError("canonical durability requires controller-owned regular files and directories")
+
+        def flush(directory: int, *, git_metadata: bool) -> None:
+            validate(os.fstat(directory), directory=True)
+            for name in sorted(os.listdir(directory)):
+                before = os.stat(name, dir_fd=directory, follow_symlinks=False)
+                if stat.S_ISLNK(before.st_mode) and not git_metadata and name != ".git":
+                    continue
+                is_directory = stat.S_ISDIR(before.st_mode)
+                validate(before, directory=is_directory)
+                descriptor = os.open(
+                    name, directory_flags if is_directory else file_flags,
+                    dir_fd=directory,
+                )
+                try:
+                    after = os.fstat(descriptor)
+                    validate(after, directory=is_directory)
+                    if (before.st_dev, before.st_ino) != (after.st_dev, after.st_ino):
+                        raise RuntimeError("canonical entry changed during durability barrier")
+                    if is_directory:
+                        flush(descriptor, git_metadata=git_metadata or name == ".git")
+                    else:
+                        os.fsync(descriptor)
+                finally:
+                    os.close(descriptor)
+            os.fsync(directory)
+
+        repository = os.open(self.repo, directory_flags)
+        try:
+            validate(os.fstat(repository), directory=True)
+            # A linked worktree/gitdir pointer is never a self-contained
+            # canonical repository, including during initial materialization.
+            git_directory = os.open(".git", directory_flags, dir_fd=repository)
+            try:
+                validate(os.fstat(git_directory), directory=True)
+                if include_worktree:
+                    flush(repository, git_metadata=False)
+                else:
+                    flush(git_directory, git_metadata=True)
+            finally:
+                os.close(git_directory)
+            if not include_worktree:
+                os.fsync(repository)
+        finally:
+            os.close(repository)
+        # Also persist a newly created canonical directory itself (initialization).
+        parent = os.open(self.repo.parent, directory_flags)
+        try:
+            os.fsync(parent)
+        finally:
+            os.close(parent)
 
     def _rollback_ref(self, candidate_sha: str) -> str:
         return f"refs/ai-ops/rollback/{self.project}/{candidate_sha}"
 
     def _workspace_is_clean(self) -> bool:
+        # Git status normally refreshes the index even though it is a query.
+        options = ("--no-optional-locks",) if self._verification_owner_uid is not None else ()
         uncommitted = git(
-            self.repo, "status", "--porcelain=v1", "--untracked-files=all"
+            self.repo, *options, "status", "--porcelain=v1", "--untracked-files=all"
         )
         ignored = git(
             self.repo, "ls-files", "--others", "--ignored", "--exclude-standard"
